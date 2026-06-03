@@ -9,4 +9,6 @@ add_executable(clob main.cpp
         book.cpp
         book.h
         logic.cpp
-        logic.h)
+        logic.h
+        orderList.cpp
+        orderList.h)
