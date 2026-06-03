@@ -3,4 +3,10 @@ project(clob)
 
 set(CMAKE_CXX_STANDARD 23)
 
-add_executable(clob main.cpp)
+add_executable(clob main.cpp
+        order.cpp
+        order.h
+        book.cpp
+        book.h
+        logic.cpp
+        logic.h)
