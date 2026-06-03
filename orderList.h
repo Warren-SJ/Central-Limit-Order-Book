@@ -13,7 +13,8 @@ class OrderList {
 public:
     OrderList();
     void addOrder(const Order &order);
-    void deleteOrder(const Order& order);
+    void deleteOrder(uint64_t id);
+    std::list<Order> getOrders();
 private:
     std::list<Order> orders;
 };

@@ -12,7 +12,11 @@
 class Book {
 public:
     Book(uint32_t id);
-
+    void addBuy(const Order &order);
+    void addSell(const Order &order);
+    uint64_t deleteBuy(const Order &order);
+    uint64_t deleteSell(const Order &order);
+    void printBook();
 private:
     uint32_t id;
     std::map<double, OrderList, std::greater<>> buy_book;
