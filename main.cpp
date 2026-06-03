@@ -9,7 +9,10 @@ int main()
     Order order2(2, 2, 1, 0, 101.0, 20);
     Order order3(3, 3, 1, 1, 120.0, 15);
     book.addBuy(order1);
+    std::cout <<"Added order 1" << std::endl;
     book.addBuy(order2);
+    std::cout <<"Added order 2" << std::endl;
     book.addSell(order3);
+    std::cout <<"Added order 3" << std::endl;
     book.printBook();
 }

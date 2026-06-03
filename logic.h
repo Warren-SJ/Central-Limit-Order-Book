@@ -4,13 +4,10 @@
 
 #ifndef CLOB_LOGIC_H
 #define CLOB_LOGIC_H
+#include <iostream>
+#include "book.h"
 
-
-
-class logic {
-
-};
-
+void matchOrder(Book &book);
 
 
 #endif //CLOB_LOGIC_H

@@ -17,6 +17,8 @@ public:
     uint64_t deleteBuy(const Order &order);
     uint64_t deleteSell(const Order &order);
     void printBook();
+    std::map<double, OrderList, std::greater<>> getBuyBook() const;
+    std::map<double, OrderList, std::less<>> getSellBook() const;
 private:
     uint32_t id;
     std::map<double, OrderList, std::greater<>> buy_book;
