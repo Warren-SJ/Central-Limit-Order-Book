@@ -4,10 +4,9 @@
 
 #ifndef CLOB_LOGIC_H
 #define CLOB_LOGIC_H
-#include <iostream>
 #include "book.h"
 
-void matchOrder(Book &book);
-
+void matchBuy(Book &book);
+void matchSell(Book &book);
 
 #endif //CLOB_LOGIC_H

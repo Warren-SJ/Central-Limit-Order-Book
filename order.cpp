@@ -30,3 +30,7 @@ double Order::getPrice() const {
 int Order::getQuantity() const {
     return quantity;
 }
+
+void Order::setQuantity(int quantity) {
+    this->quantity = quantity;
+}

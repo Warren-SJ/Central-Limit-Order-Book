@@ -15,13 +15,13 @@ Book::Book(const uint32_t id) : id(id) {
 void Book::addBuy(const Order &order) {
     const double price = order.getPrice();
     buy_book[price].addOrder(order);
-    matchOrder(*this);
+    matchBuy(*this);
 }
 
 void Book::addSell(const Order &order) {
     const double price = order.getPrice();
     sell_book[price].addOrder(order);
-    matchOrder(*this);
+    matchSell(*this);
 }
 
 uint64_t Book::deleteBuy(const Order &order) {
@@ -29,6 +29,9 @@ uint64_t Book::deleteBuy(const Order &order) {
     if (const auto it = buy_book.find(price); it != buy_book.end()) {
         uint64_t id = order.getId();
         buy_book[price].deleteOrder(id);
+        if (buy_book[price].getOrders().empty()) {
+            buy_book.erase(price);
+        }
         return id;
     }
     return 0;
@@ -39,6 +42,9 @@ uint64_t Book::deleteSell(const Order &order) {
     if (const auto it = sell_book.find(price); it != sell_book.end()) {
         uint64_t id = order.getId();
         sell_book[price].deleteOrder(id);
+        if (sell_book[price].getOrders().empty()) {
+            sell_book.erase(price);
+        }
         return id;
     }
     return 0;
@@ -59,10 +65,10 @@ void Book::printBook() {
     }
 }
 
-std::map<double, OrderList, std::greater<>> Book::getBuyBook() const {
-    return buy_book;
+std::map<double, OrderList, std::greater<>>* Book::getBuyBook() {
+    return &buy_book;
 }
 
-std::map<double, OrderList, std::less<>> Book::getSellBook() const {
-    return sell_book;
+std::map<double, OrderList, std::less<>>* Book::getSellBook() {
+    return &sell_book;
 }

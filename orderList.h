@@ -14,7 +14,7 @@ public:
     OrderList();
     void addOrder(const Order &order);
     void deleteOrder(uint64_t id);
-    std::list<Order> getOrders();
+    std::list<Order> getOrders() const;
 private:
     std::list<Order> orders;
 };

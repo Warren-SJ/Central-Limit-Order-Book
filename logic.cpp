@@ -4,21 +4,62 @@
 
 #include "logic.h"
 
-void matchOrder(Book &book){
-    // This function will implement the logic to match buy and sell orders in the book.
-    // It will check the highest bid price against the lowest ask price and execute trades accordingly.
-    const std::map<double, OrderList, std::greater<>> buyBook = book.getBuyBook();
-    const std::map<double, OrderList, std::less<>> sellBook = book.getSellBook();
+void matchBuy(Book &book) {
+    // This function will run when a new buy order is made
+    const std::map<double, OrderList, std::greater<>>* buyBook = book.getBuyBook();
+    const std::map<double, OrderList, std::less<>>* sellBook = book.getSellBook();
 
-    if (buyBook.empty() || sellBook.empty()) {
+    if (buyBook->empty() || sellBook->empty()) {
         return;
     }
 
-    double bid = buyBook.begin()->first;
-    double ask = sellBook.begin()->first;
+    while (buyBook->begin()->first >= sellBook->begin()->first) {
+        double execution_price = sellBook->begin()->first;
+        OrderList orders = buyBook->begin()->second;
+        int quantity = orders.getOrders().begin()->getQuantity();
+        while (quantity > 0) {
+            if (sellBook->begin()->first != execution_price) {
+                break;
+            }
+            int sell_amount = sellBook->begin()->second.getOrders().begin()->getQuantity();
+            if (sell_amount > quantity) {
+                sellBook->begin()->second.getOrders().begin()->setQuantity(sell_amount - quantity);
+                quantity = 0;
+            }
+            else{
+                book.deleteSell(*(sellBook->begin()->second.getOrders().begin()));
+                sell_amount == quantity ? quantity = 0 : quantity -= sell_amount;
+            }
+        }
+    }
+}
 
-    if (bid < ask) {
+void matchSell(Book &book) {
+    // This function will run when a new sell order is made
+    const std::map<double, OrderList, std::greater<>>* buyBook = book.getBuyBook();
+    const std::map<double, OrderList, std::less<>>* sellBook = book.getSellBook();
+
+    if (buyBook->empty() || sellBook->empty()) {
         return;
     }
-    std::cout << "Matching possible" <<std::endl;
+
+    while (sellBook->begin()->first <= buyBook->begin()->first) {
+        double execution_price = buyBook->begin()->first;
+        OrderList orders = sellBook->begin()->second;
+        int quantity = orders.getOrders().begin()->getQuantity();
+        while (quantity > 0) {
+            if (buyBook->begin()->first != execution_price) {
+                break;
+            }
+            int buy_amount = buyBook->begin()->second.getOrders().begin()->getQuantity();
+            if (buy_amount > quantity) {
+                buyBook->begin()->second.getOrders().begin()->setQuantity(buy_amount - quantity);
+                quantity = 0;
+            }
+            else{
+                book.deleteBuy(*(buyBook->begin()->second.getOrders().begin()));
+                buy_amount == quantity ? quantity = 0 : quantity -= buy_amount;
+            }
+        }
+    }
 }

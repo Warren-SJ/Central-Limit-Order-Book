@@ -21,7 +21,7 @@ void OrderList::deleteOrder(uint64_t id) {
     }
 }
 
-std::list<Order> OrderList::getOrders() {
+std::list<Order> OrderList::getOrders() const{
     return orders;
 }
 

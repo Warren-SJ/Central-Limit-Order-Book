@@ -13,6 +13,7 @@ public:
     uint64_t getId() const;
     double getPrice() const;
     int getQuantity() const;
+    void setQuantity(int quantity);
 private:
     uint64_t id;
     uint64_t client;

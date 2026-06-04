@@ -13,6 +13,8 @@ int main()
     book.addBuy(order2);
     std::cout <<"Added order 2" << std::endl;
     book.addSell(order3);
+    book.printBook();
     std::cout <<"Added order 3" << std::endl;
     book.printBook();
+    return 0;
 }
