@@ -14,7 +14,7 @@ int parseSide(const std::string& sideStr) {
 
 int main()
 {
-    std::ifstream file("../orders.csv");
+    std::ifstream file("orders.csv");
     if (!file.is_open()) {
         std::cerr << "Failed to open orders.csv" << std::endl;
         return 1;

@@ -6,18 +6,19 @@
 
 void matchBuy(Book &book) {
     // This function will run when a new buy order is made
-    std::map<double, OrderList, std::greater<>>* buyBook = book.getBuyBook();
-    std::map<double, OrderList, std::less<>>* sellBook = book.getSellBook();
+    std::map<int, OrderList, std::greater<>>* buyBook = book.getBuyBook();
+    std::map<int, OrderList, std::less<>>* sellBook = book.getSellBook();
 
     if (buyBook->empty() || sellBook->empty()) {
         return;
     }
 
-    while (buyBook->begin()->first >= sellBook->begin()->first && !(buyBook->empty() || sellBook->empty())) {
+    while (!(buyBook->empty() || sellBook->empty()) && buyBook->begin()->first >= sellBook->begin()->first) {
         double execution_price = sellBook->begin()->first;
         auto& orders = buyBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
+            if (sellBook->empty()) break;
             if (sellBook->begin()->first != execution_price) {
                 break;
             }
@@ -28,7 +29,7 @@ void matchBuy(Book &book) {
                 quantity = 0;
             }
             else{
-                book.deleteSell(*(buyBook->begin()->second.getOrders()->begin()));
+                book.deleteSell(*(sellBook->begin()->second.getOrders()->begin()));
                 if (sell_amount == quantity) {
                     book.deleteBuy(*(buyBook->begin()->second.getOrders()->begin()));
                     quantity = 0;
@@ -44,18 +45,19 @@ void matchBuy(Book &book) {
 
 void matchSell(Book &book) {
     // This function will run when a new sell order is made
-    std::map<double, OrderList, std::greater<>>* buyBook = book.getBuyBook();
-    std::map<double, OrderList, std::less<>>* sellBook = book.getSellBook();
+    std::map<int, OrderList, std::greater<>>* buyBook = book.getBuyBook();
+    std::map<int, OrderList, std::less<>>* sellBook = book.getSellBook();
 
     if (buyBook->empty() || sellBook->empty()) {
         return;
     }
 
-    while (sellBook->begin()->first <= buyBook->begin()->first && !(buyBook->empty() || sellBook->empty())) {
+    while (!(buyBook->empty() || sellBook->empty()) && sellBook->begin()->first <= buyBook->begin()->first) {
         double execution_price = buyBook->begin()->first;
         auto& orders = sellBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
+            if (buyBook->empty()) break;
             if (buyBook->begin()->first != execution_price) {
                 break;
             }

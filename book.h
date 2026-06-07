@@ -17,12 +17,12 @@ public:
     uint64_t deleteBuy(const Order &order);
     uint64_t deleteSell(const Order &order);
     void printBook();
-    std::map<double, OrderList, std::greater<>>* getBuyBook();
-    std::map<double, OrderList, std::less<>>* getSellBook();
+    std::map<int, OrderList, std::greater<>>* getBuyBook();
+    std::map<int, OrderList, std::less<>>* getSellBook();
 private:
     uint32_t id;
-    std::map<double, OrderList, std::greater<>> buy_book;
-    std::map<double, OrderList, std::less<>> sell_book;
+    std::map<int, OrderList, std::greater<>> buy_book;
+    std::map<int, OrderList, std::less<>> sell_book;
 };
 
 #endif //CLOB_BOOK_H
