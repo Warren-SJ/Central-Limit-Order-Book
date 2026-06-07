@@ -1,20 +1,67 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
 #include "book.h"
 #include "order.h"
 
+int parseSide(const std::string& sideStr) {
+    if (sideStr == "BUY" || sideStr == "buy" || sideStr == "0") {
+        return 0;
+    }
+    return 1;
+}
+
 int main()
 {
-    Book book(1);
-    Order order1(1, 1, 1, 0, 100.0, 10);
-    Order order2(2, 2, 1, 0, 101.0, 20);
-    Order order3(3, 3, 1, 1, 90.0, 15);
-    book.addBuy(order1);
-    std::cout <<"Added order 1" << std::endl;
-    book.addBuy(order2);
-    std::cout <<"Added order 2" << std::endl;
-    book.printBook();
-    book.addSell(order3);
-    std::cout <<"Added order 3" << std::endl;
-    book.printBook();
+    std::ifstream file("../orders.csv");
+    if (!file.is_open()) {
+        std::cerr << "Failed to open orders.csv" << std::endl;
+        return 1;
+    }
+    std::string line;
+    std::unordered_map<int, Book> books;
+    int orderId = 1;
+
+    while (std::getline(file, line)) {
+
+        std::istringstream iss(line);
+        std::string stockStr;
+        std::string clientStr;
+        std::string sideStr;
+        std::string priceStr;
+        std::string quantityStr;
+
+        std::getline(iss, stockStr,',');
+        std::getline(iss, clientStr,',');
+        std::getline(iss, sideStr,',');
+        std::getline(iss, priceStr,',');
+        std::getline(iss, quantityStr,',');
+
+        int32_t stockId = std::stoi(stockStr);
+        int64_t clientId = std::stoll(clientStr);
+        int side = parseSide(sideStr);
+        double price = std::stod(priceStr);
+        int quantity = std::stoi(quantityStr);
+
+        if (!books.contains(stockId)) {
+            books.emplace(stockId, Book(stockId));
+        }
+
+        Book& book = books.at(stockId);
+
+        Order order(orderId++, clientId, stockId, side, price, quantity);
+        if (side == 0) {
+            book.addBuy(order);
+        } else {
+            book.addSell(order);
+        }
+    }
+    file.close();
+
+    for (auto& book : books) {
+        std::cout << book.first << std::endl;
+        book.second.printBook();
+    }
     return 0;
 }
