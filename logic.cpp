@@ -13,9 +13,9 @@ void matchBuy(Book &book) {
         return;
     }
 
-    while (buyBook->begin()->first >= sellBook->begin()->first) {
+    while (buyBook->begin()->first >= sellBook->begin()->first && !(buyBook->empty() || sellBook->empty())) {
         double execution_price = sellBook->begin()->first;
-        OrderList orders = buyBook->begin()->second;
+        auto& orders = buyBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
             if (sellBook->begin()->first != execution_price) {
@@ -51,9 +51,9 @@ void matchSell(Book &book) {
         return;
     }
 
-    while (sellBook->begin()->first <= buyBook->begin()->first) {
+    while (sellBook->begin()->first <= buyBook->begin()->first && !(buyBook->empty() || sellBook->empty())) {
         double execution_price = buyBook->begin()->first;
-        OrderList orders = sellBook->begin()->second;
+        auto& orders = sellBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
             if (buyBook->begin()->first != execution_price) {
