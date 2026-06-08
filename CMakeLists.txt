@@ -3,6 +3,12 @@ project(clob)
 
 set(CMAKE_CXX_STANDARD 23)
 
+#list(APPEND CMAKE_PREFIX_PATH
+#        "${CMAKE_BINARY_DIR}/build/Release/generators"
+#)
+
+find_package(Crow CONFIG REQUIRED)
+
 add_executable(clob main.cpp
         order.cpp
         order.h
@@ -11,4 +17,7 @@ add_executable(clob main.cpp
         logic.cpp
         logic.h
         orderList.cpp
-        orderList.h)
+        orderList.h
+)
+
+target_link_libraries(clob PRIVATE Crow::Crow)

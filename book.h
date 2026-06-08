@@ -11,7 +11,7 @@
 
 class Book {
 public:
-    Book(uint32_t id);
+    explicit Book(uint32_t id);
     void addBuy(const Order &order);
     void addSell(const Order &order);
     uint64_t deleteBuy(const Order &order);

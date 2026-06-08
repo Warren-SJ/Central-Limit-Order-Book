@@ -8,18 +8,18 @@
 
 class Order {
 public:
-    Order(uint64_t id, uint64_t client, uint32_t book, int side, double price, int quantity);
-    uint64_t getClient() const;
-    uint64_t getId() const;
-    double getPrice() const;
-    int getQuantity() const;
-    void setQuantity(int quantity);
+    Order(uint64_t id, uint64_t client, uint32_t book, int side, int price, int quantity);
+    [[nodiscard]] uint64_t getClient() const;
+    [[nodiscard]] uint64_t getId() const;
+    [[nodiscard]] int getPrice() const;
+    [[nodiscard]] int getQuantity() const;
+    void setQuantity(int newQuantity);
 private:
     uint64_t id;
     uint64_t client;
     uint32_t book;
     int side;
-    double price;
+    int price;
     int quantity;
 };
 #endif //CLOB_ORDER_H

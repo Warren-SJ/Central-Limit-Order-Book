@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include "book.h"
 #include "order.h"
+#include <crow.h>
 
 int parseSide(const std::string& sideStr) {
     if (sideStr == "BUY" || sideStr == "buy" || sideStr == "0") {
@@ -14,7 +15,7 @@ int parseSide(const std::string& sideStr) {
 
 int main()
 {
-    std::ifstream file("orders.csv");
+    std::ifstream file("../../orders.csv");
     if (!file.is_open()) {
         std::cerr << "Failed to open orders.csv" << std::endl;
         return 1;
@@ -41,7 +42,7 @@ int main()
         int32_t stockId = std::stoi(stockStr);
         int64_t clientId = std::stoll(clientStr);
         int side = parseSide(sideStr);
-        double price = std::stod(priceStr);
+        int price = std::stoi(priceStr);
         int quantity = std::stoi(quantityStr);
 
         if (!books.contains(stockId)) {
@@ -59,9 +60,11 @@ int main()
     }
     file.close();
 
-    for (auto& book : books) {
-        std::cout << book.first << std::endl;
-        book.second.printBook();
+    for (auto&[fst, snd] : books) {
+        std::cout << fst << std::endl;
+        snd.printBook();
     }
     return 0;
 }
+
+

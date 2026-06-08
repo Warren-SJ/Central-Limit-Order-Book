@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <ostream>
+#include <ranges>
 
 Book::Book(const uint32_t id) : id(id) {
 
@@ -27,8 +28,8 @@ void Book::addSell(const Order &order) {
 uint64_t Book::deleteBuy(const Order &order) {
     const int price = static_cast<int>(order.getPrice() * 100);
     if (const auto it = buy_book.find(price); it != buy_book.end()) {
-        uint64_t id = order.getId();
-        buy_book[price].deleteOrder(id);
+        const uint64_t orderId = order.getId();
+        buy_book[price].deleteOrder(orderId);
         if (buy_book[price].getOrders()->empty()) {
             buy_book.erase(price);
         }
@@ -40,8 +41,8 @@ uint64_t Book::deleteBuy(const Order &order) {
 uint64_t Book::deleteSell(const Order &order) {
     const int price = static_cast<int>(order.getPrice() * 100);
     if (const auto it = sell_book.find(price); it != sell_book.end()) {
-        uint64_t id = order.getId();
-        sell_book[price].deleteOrder(id);
+        const uint64_t orderId = order.getId();
+        sell_book[price].deleteOrder(orderId);
         if (sell_book[price].getOrders()->empty()) {
             sell_book.erase(price);
         }
@@ -52,15 +53,15 @@ uint64_t Book::deleteSell(const Order &order) {
 
 void Book::printBook() {
     std::cout << "Buy Book:" << std::endl;
-    for (auto & it : buy_book) {
-        for (const auto &order : *it.second.getOrders()) {
-            std::cout << " OrderID: " << order.getId() << "Client" << order.getClient() <<  " Price: " << order.getPrice() << " Quantity: " << order.getQuantity() << std::endl;
+    for (auto &val: buy_book | std::views::values) {
+        for (const auto &order : *val.getOrders()) {
+            std::cout << " OrderID: " << order.getId() << " Client" << order.getClient() <<  " Price: " << order.getPrice()/100.0 << " Quantity: " << order.getQuantity() << std::endl;
         }
     }
     std::cout << "Sell Book:" << std::endl;
-    for (auto & it : sell_book) {
-        for (const auto &order : *it.second.getOrders()) {
-            std::cout << " OrderID: " << order.getId() << " Client: " << order.getClient() <<  " Price: " << order.getPrice() << " Quantity: " << order.getQuantity() << std::endl;
+    for (auto &val: sell_book | std::views::values) {
+        for (const auto &order : *val.getOrders()) {
+            std::cout << " OrderID: " << order.getId() << " Client: " << order.getClient() <<  " Price: " << order.getPrice()/100.0 << " Quantity: " << order.getQuantity() << std::endl;
         }
     }
 }
