@@ -22,12 +22,24 @@ This repository contains a C++ implementation of a central limit order book (CLO
 
 To compile and run the application, follow these steps:
 1. Ensure you have a C++ compiler installed (e.g., g++).
-2. Navigate to the directory containing the source files.
-3. Compile the source files using the following command:
+2. Install Conan, a C++ package manager, if you haven't already. You can find installation instructions on the [Conan website](https://conan.io/).
+3. Clone the repository to your local machine:
 ```bash
-g++ -o clob main.cpp book.cpp order.cpp logic.cpp
+git clone https://github.com/Warren-SJ/CLOB.git
+cd CLOB
 ```
-4. Run the compiled application:
+4. Run the following command to install the required dependencies:
+```bash
+mkdir build && cd build
+conan install .. --output-folder=. --build=missing
+```
+5. Compile the application using the following command:
+```bash
+cmake .. -DCMAKE_TOOLCHAIN_FILE=generators/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+```
+6. Run the compiled application:
 ```bash
 ./clob
 ```
+The server will start listening on port 8080.
