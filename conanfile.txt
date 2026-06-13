@@ -1,7 +1,14 @@
 [requires]
 crowcpp-crow/1.3.2
+soci/4.1.2
+
+[options]
+soci/*:shared=True
+soci/*:with_postgresql=True
+
 [generators]
 CMakeDeps
 CMakeToolchain
+
 [layout]
 cmake_layout

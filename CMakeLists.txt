@@ -3,11 +3,12 @@ project(clob)
 
 set(CMAKE_CXX_STANDARD 23)
 
-#list(APPEND CMAKE_PREFIX_PATH
-#        "${CMAKE_BINARY_DIR}/build/Release/generators"
-#)
+list(APPEND CMAKE_PREFIX_PATH
+        "${CMAKE_BINARY_DIR}/build/Debug/generators"
+)
 
 find_package(Crow CONFIG REQUIRED)
+find_package(SOCI REQUIRED COMPONENTS )
 
 add_executable(clob main.cpp
         order.cpp
@@ -20,4 +21,8 @@ add_executable(clob main.cpp
         orderList.h
 )
 
-target_link_libraries(clob PRIVATE Crow::Crow)
+target_link_libraries(clob PRIVATE
+        Crow::Crow
+        SOCI::soci_core
+        SOCI::soci_postgresql
+)
