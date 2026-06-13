@@ -14,7 +14,7 @@ void matchBuy(Book &book) {
     }
 
     while (!(buyBook->empty() || sellBook->empty()) && buyBook->begin()->first >= sellBook->begin()->first) {
-        double execution_price = sellBook->begin()->first;
+        const double execution_price = sellBook->begin()->first;
         auto& orders = buyBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
@@ -22,8 +22,7 @@ void matchBuy(Book &book) {
             if (sellBook->begin()->first != execution_price) {
                 break;
             }
-            int sell_amount = sellBook->begin()->second.getOrders()->begin()->getQuantity();
-            if (sell_amount > quantity) {
+            if (const int sell_amount = sellBook->begin()->second.getOrders()->begin()->getQuantity(); sell_amount > quantity) {
                 sellBook->begin()->second.getOrders()->begin()->setQuantity(sell_amount - quantity);
                 book.deleteBuy(*(buyBook->begin()->second.getOrders()->begin()));
                 quantity = 0;
@@ -53,7 +52,7 @@ void matchSell(Book &book) {
     }
 
     while (!(buyBook->empty() || sellBook->empty()) && sellBook->begin()->first <= buyBook->begin()->first) {
-        double execution_price = buyBook->begin()->first;
+        const double execution_price = buyBook->begin()->first;
         auto& orders = sellBook->begin()->second;
         int quantity = orders.getOrders()->begin()->getQuantity();
         while (quantity > 0) {
@@ -61,8 +60,7 @@ void matchSell(Book &book) {
             if (buyBook->begin()->first != execution_price) {
                 break;
             }
-            int buy_amount = buyBook->begin()->second.getOrders()->begin()->getQuantity();
-            if (buy_amount > quantity) {
+            if (const int buy_amount = buyBook->begin()->second.getOrders()->begin()->getQuantity(); buy_amount > quantity) {
                 buyBook->begin()->second.getOrders()->begin()->setQuantity(buy_amount - quantity);
                 book.deleteSell(*(sellBook->begin()->second.getOrders()->begin()));
                 quantity = 0;
