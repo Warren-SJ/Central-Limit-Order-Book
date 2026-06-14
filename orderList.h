@@ -12,8 +12,9 @@
 class OrderList {
 public:
     OrderList();
-    void addOrder(const Order &order);
-    void deleteOrder(uint64_t id);
+    typedef std::list<Order>::iterator OrderIterator;
+    OrderIterator addOrder(const Order &order);
+    void removeOrder(const OrderIterator &it);
     std::list<Order>* getOrders();
 private:
     std::list<Order> orders;

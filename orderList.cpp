@@ -8,17 +8,13 @@ OrderList::OrderList() {
     orders.clear();
 }
 
-void OrderList::addOrder(const Order &order) {
+OrderList::OrderIterator OrderList::addOrder(const Order &order) {
     orders.push_back(order);
+    return std::prev(orders.end());
 }
 
-void OrderList::deleteOrder(const uint64_t id) {
-    for (auto it = orders.begin(); it != orders.end(); ++it) {
-        if (it->getId() == id) {
-            orders.erase(it);
-            break;
-        }
-    }
+void OrderList::removeOrder(const OrderIterator &it) {
+    orders.erase(it);
 }
 
 std::list<Order>* OrderList::getOrders(){

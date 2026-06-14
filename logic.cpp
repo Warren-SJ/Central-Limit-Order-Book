@@ -3,78 +3,81 @@
 //
 
 #include "logic.h"
+#include <algorithm>
 
 void matchBuy(Book &book) {
-    // This function will run when a new buy order is made
-    std::map<int, OrderList, std::greater<>>* buyBook = book.getBuyBook();
-    std::map<int, OrderList, std::less<>>* sellBook = book.getSellBook();
+    while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
+        const auto buyPriceIt = book.getBuyBook()->begin();
+        const auto sellPriceIt = book.getSellBook()->begin();
 
-    if (buyBook->empty() || sellBook->empty()) {
-        return;
-    }
+        if (buyPriceIt->first < sellPriceIt->first) break;
 
-    while (!(buyBook->empty() || sellBook->empty()) && buyBook->begin()->first >= sellBook->begin()->first) {
-        const double execution_price = sellBook->begin()->first;
-        auto& orders = buyBook->begin()->second;
-        int quantity = orders.getOrders()->begin()->getQuantity();
-        while (quantity > 0) {
-            if (sellBook->empty()) break;
-            if (sellBook->begin()->first != execution_price) {
+        auto* buyOrders = buyPriceIt->second.getOrders();
+        auto* sellOrders = sellPriceIt->second.getOrders();
+
+        while (!buyOrders->empty() && !sellOrders->empty()) {
+            auto& buyOrder = buyOrders->front();
+            auto& sellOrder = sellOrders->front();
+
+            int buyQty = buyOrder.getQuantity();
+            int sellQty = sellOrder.getQuantity();
+            const int fillQty = std::min(buyQty, sellQty);
+
+            buyOrder.setQuantity(buyQty - fillQty);
+            sellOrder.setQuantity(sellQty - fillQty);
+
+            const uint64_t buyId = buyOrder.getId();
+            const uint64_t sellId = sellOrder.getId();
+            const int buyQtyLeft = buyOrder.getQuantity();
+            const int sellQtyLeft = sellOrder.getQuantity();
+
+            if (buyQtyLeft == 0) {
+                book.deleteBuy(buyId);
+            }
+            if (sellQtyLeft == 0) {
+                book.deleteSell(sellId);
+            }
+            if (buyQtyLeft == 0 || sellQtyLeft == 0) {
                 break;
-            }
-            if (const int sell_amount = sellBook->begin()->second.getOrders()->begin()->getQuantity(); sell_amount > quantity) {
-                sellBook->begin()->second.getOrders()->begin()->setQuantity(sell_amount - quantity);
-                book.deleteBuy(*(buyBook->begin()->second.getOrders()->begin()));
-                quantity = 0;
-            }
-            else{
-                book.deleteSell(*(sellBook->begin()->second.getOrders()->begin()));
-                if (sell_amount == quantity) {
-                    book.deleteBuy(*(buyBook->begin()->second.getOrders()->begin()));
-                    quantity = 0;
-                }
-                else {
-                    quantity -= sell_amount;
-                    book.getBuyBook()->begin()->second.getOrders()->begin()->setQuantity(quantity);
-                }
             }
         }
     }
 }
 
 void matchSell(Book &book) {
-    // This function will run when a new sell order is made
-    std::map<int, OrderList, std::greater<>>* buyBook = book.getBuyBook();
-    std::map<int, OrderList, std::less<>>* sellBook = book.getSellBook();
+    while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
+        const auto buyPriceIt = book.getBuyBook()->begin();
+        const auto sellPriceIt = book.getSellBook()->begin();
 
-    if (buyBook->empty() || sellBook->empty()) {
-        return;
-    }
+        if (buyPriceIt->first < sellPriceIt->first) break;
 
-    while (!(buyBook->empty() || sellBook->empty()) && sellBook->begin()->first <= buyBook->begin()->first) {
-        const double execution_price = buyBook->begin()->first;
-        auto& orders = sellBook->begin()->second;
-        int quantity = orders.getOrders()->begin()->getQuantity();
-        while (quantity > 0) {
-            if (buyBook->empty()) break;
-            if (buyBook->begin()->first != execution_price) {
+        auto* buyOrders = buyPriceIt->second.getOrders();
+        auto* sellOrders = sellPriceIt->second.getOrders();
+
+        while (!buyOrders->empty() && !sellOrders->empty()) {
+            auto& buyOrder = buyOrders->front();
+            auto& sellOrder = sellOrders->front();
+
+            int buyQty = buyOrder.getQuantity();
+            int sellQty = sellOrder.getQuantity();
+            const int fillQty = std::min(buyQty, sellQty);
+
+            buyOrder.setQuantity(buyQty - fillQty);
+            sellOrder.setQuantity(sellQty - fillQty);
+
+            const uint64_t buyId = buyOrder.getId();
+            const uint64_t sellId = sellOrder.getId();
+            const int buyQtyLeft = buyOrder.getQuantity();
+            const int sellQtyLeft = sellOrder.getQuantity();
+
+            if (buyQtyLeft == 0) {
+                book.deleteBuy(buyId);
+            }
+            if (sellQtyLeft == 0) {
+                book.deleteSell(sellId);
+            }
+            if (buyQtyLeft == 0 || sellQtyLeft == 0) {
                 break;
-            }
-            if (const int buy_amount = buyBook->begin()->second.getOrders()->begin()->getQuantity(); buy_amount > quantity) {
-                buyBook->begin()->second.getOrders()->begin()->setQuantity(buy_amount - quantity);
-                book.deleteSell(*(sellBook->begin()->second.getOrders()->begin()));
-                quantity = 0;
-            }
-            else{
-                book.deleteBuy(*(buyBook->begin()->second.getOrders()->begin()));
-                if (buy_amount == quantity) {
-                    book.deleteSell(*(sellBook->begin()->second.getOrders()->begin()));
-                    quantity = 0;
-                }
-                else {
-                    quantity -= buy_amount;
-                    book.getSellBook()->begin()->second.getOrders()->begin()->setQuantity(quantity);
-                }
             }
         }
     }

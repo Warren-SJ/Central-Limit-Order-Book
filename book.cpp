@@ -14,41 +14,43 @@ Book::Book(const uint32_t id) : id(id) {
 }
 
 void Book::addBuy(const Order &order) {
-    const int price = static_cast<int>(order.getPrice() * 100);
-    buy_book[price].addOrder(order);
+    const int price = order.getPrice();
+    const auto it = buy_book[price].addOrder(order);
+    order_lookup[order.getId()] = {price, it};
     matchBuy(*this);
 }
 
 void Book::addSell(const Order &order) {
-    const int price = static_cast<int>(order.getPrice() * 100);
-    sell_book[price].addOrder(order);
+    const int price = order.getPrice();
+    const auto it = sell_book[price].addOrder(order);
+    order_lookup[order.getId()] = {price, it};
     matchSell(*this);
 }
 
-uint64_t Book::deleteBuy(const Order &order) {
-    const int price = static_cast<int>(order.getPrice() * 100);
-    if (const auto it = buy_book.find(price); it != buy_book.end()) {
-        const uint64_t orderId = order.getId();
-        buy_book[price].deleteOrder(orderId);
-        if (buy_book[price].getOrders()->empty()) {
-            buy_book.erase(price);
-        }
-        return id;
+uint64_t Book::deleteBuy(const uint64_t orderId) {
+    const auto it = order_lookup.find(orderId);
+    if (it == order_lookup.end()) return 0;
+    int price = it->second.price;
+    const auto order_it = it->second.it;
+    buy_book[price].removeOrder(order_it);
+    if (buy_book[price].getOrders()->empty()) {
+        buy_book.erase(price);
     }
-    return 0;
+    order_lookup.erase(it);
+    return orderId;
 }
 
-uint64_t Book::deleteSell(const Order &order) {
-    const int price = static_cast<int>(order.getPrice() * 100);
-    if (const auto it = sell_book.find(price); it != sell_book.end()) {
-        const uint64_t orderId = order.getId();
-        sell_book[price].deleteOrder(orderId);
-        if (sell_book[price].getOrders()->empty()) {
-            sell_book.erase(price);
-        }
-        return id;
+uint64_t Book::deleteSell(const uint64_t orderId) {
+    const auto it = order_lookup.find(orderId);
+    if (it == order_lookup.end()) return 0;
+    int price = it->second.price;
+    const auto order_it = it->second.it;
+    sell_book[price].removeOrder(order_it);
+    if (sell_book[price].getOrders()->empty()) {
+        sell_book.erase(price);
     }
-    return 0;
+    order_lookup.erase(it);
+    return orderId;
 }
 
 void Book::printBook() {
