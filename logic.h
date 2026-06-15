@@ -5,8 +5,9 @@
 #ifndef CLOB_LOGIC_H
 #define CLOB_LOGIC_H
 #include "book.h"
+#include "journal.h"
 
-void matchBuy(Book &book);
-void matchSell(Book &book);
+void matchBuy(Book &book, Journal &journal);
+void matchSell(Book &book, Journal &journal);
 
 #endif //CLOB_LOGIC_H

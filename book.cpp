@@ -2,29 +2,31 @@
 // Created by warren on 03-Jun-26.
 //
 
-#include "book.h"
-#include "logic.h"
 
 #include <iostream>
 #include <ostream>
 #include <ranges>
 
+#include "journal.h"
+#include "book.h"
+#include "logic.h"
+
 Book::Book(const uint32_t id) : id(id) {
 
 }
 
-void Book::addBuy(const Order &order) {
+void Book::addBuy(const Order &order, Journal& journal) {
     const int price = order.getPrice();
     const auto it = buy_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchBuy(*this);
+    matchBuy(*this, journal);
 }
 
-void Book::addSell(const Order &order) {
+void Book::addSell(const Order &order, Journal& journal) {
     const int price = order.getPrice();
     const auto it = sell_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchSell(*this);
+    matchSell(*this, journal);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {
@@ -74,4 +76,8 @@ std::map<int, OrderList, std::greater<>>* Book::getBuyBook() {
 
 std::map<int, OrderList, std::less<>>* Book::getSellBook() {
     return &sell_book;
+}
+
+uint32_t Book::getId() const {
+    return id;
 }

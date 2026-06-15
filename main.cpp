@@ -1,11 +1,15 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
-#include "book.h"
-#include "order.h"
 #include <crow.h>
-#include "soci/soci.h"
-#include "soci/postgresql/soci-postgresql.h"
+#include <soci/soci.h>
+#include <soci/postgresql/soci-postgresql.h>
+#include "book.h"
+#include "journal.h"
+#include "order.h"
+
+// Add trades table
+
 
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
 
@@ -44,16 +48,16 @@ int parseSide(const std::string& sideStr) {
      return 1;
  }
 
-void addOrder(const Order& order, const int32_t stockId, const int side) {
+void addOrder(const Order& order, const int32_t stockId, const int side, Journal& journal) {
      if (!books.contains(stockId)) {
          books.emplace(stockId, Book(stockId));
      }
 
      Book& book = books.at(stockId);
      if (side == 0) {
-         book.addBuy(order);
+         book.addBuy(order, journal);
      } else {
-         book.addSell(order);
+         book.addSell(order, journal);
      }
 
      book.printBook();
@@ -81,9 +85,11 @@ int main() {
         pool.at(i).open(backEnd,conn);
     }
 
+    Journal journal;
+
     crow::SimpleApp app;
 
-    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&pool](const crow::request& req) {
+    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&pool, &journal](const crow::request& req) {
         soci::session sql(pool);
         const auto json_data = crow::json::load(req.body);
 
@@ -101,7 +107,7 @@ int main() {
 
             std::lock_guard<std::mutex> lock(engine_mutex);
             const Order order(orderId++, clientId, stockId, side, price, quantity);
-            addOrder(order, stockId, side);
+            addOrder(order, stockId, side, journal);
 
             crow::json::wvalue response_body;
             response_body["status"] = "success";
