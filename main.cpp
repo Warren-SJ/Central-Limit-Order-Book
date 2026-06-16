@@ -11,7 +11,6 @@
 #include <soci/postgresql/soci-postgresql.h>
 
 #include "book.h"
-#include "journal.h"
 #include "order.h"
 
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
@@ -19,6 +18,7 @@ soci::backend_factory const &backEnd = *soci::factory_postgresql();
 std::unordered_map<int, std::unique_ptr<Book>> books;
 std::shared_mutex books_map_mutex;
 std::atomic<uint64_t> globalOrderId{1};
+std::atomic<uint64_t> globalTransactionId{1};
 
 std::unordered_map<std::string, std::string> loadEnvFile(const std::string& filename) {
 
@@ -52,7 +52,7 @@ char parseSide(const std::string& sideStr) {
      return 'S';
  }
 
-void addOrder(const Order& order, const int32_t stockId, const int side, Journal& journal, soci::connection_pool& pool) {
+void addOrder(const Order& order, const int32_t stockId, const int side, soci::session& sql, std::atomic<uint64_t>& transactionId) {
      Book* book_ptr = nullptr;
      {
          std::shared_lock lock(books_map_mutex);
@@ -70,10 +70,10 @@ void addOrder(const Order& order, const int32_t stockId, const int side, Journal
      }
 
      std::lock_guard book_lock(book_ptr->getMutex());
-     if (side == 0) {
-         book_ptr->addBuy(order, journal, pool);
+     if (side == 'B') {
+         book_ptr->addBuy(order, stockId, sql, transactionId);
      } else {
-         book_ptr->addSell(order, journal, pool);
+         book_ptr->addSell(order, stockId, sql, transactionId);
      }
 
      book_ptr->printBook();
@@ -101,11 +101,9 @@ int main() {
         pool.at(i).open(backEnd,conn);
     }
 
-    Journal journal;
-
     crow::SimpleApp app;
 
-    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&pool, &journal](const crow::request& req) {
+    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&pool](const crow::request& req) {
         soci::session sql(pool);
         const auto json_data = crow::json::load(req.body);
 
@@ -123,27 +121,26 @@ int main() {
 
             const uint64_t id = globalOrderId.fetch_add(1, std::memory_order_relaxed);
             const Order order(id, clientId, stockId, side, price, quantity);
-            
-            addOrder(order, stockId, side, journal, pool);
+
+            soci::transaction tr(sql);
 
             try {
+                addOrder(order, stockId, side, sql, globalTransactionId);
                 constexpr char status = 'N';
                 sql << "INSERT INTO orders (id, client, ticker, price, original_quantity, remaining_quantity, status, type, timestamp) VALUES "
-                       "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
+                "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
                 soci::use(id), soci::use(clientId), soci::use(stockId), soci::use(price), soci::use(quantity),
                 soci::use(quantity), soci::use(status), soci::use(side);
+                tr.commit();
+                return crow::response(200, "Order processed!");
             }
             catch (const std::exception& e) {
-                std::cerr << "DB Error: " << e.what() << std::endl;
+                tr.rollback();
+                return crow::response(400, e.what());
             }
 
-            crow::json::wvalue response_body;
-            response_body["status"] = "success";
-            response_body["message"] = "Order processed";
-
-            return crow::response(200, response_body);
-
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception& e) {
             return crow::response(400, e.what());
         }
     });

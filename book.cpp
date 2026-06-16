@@ -6,18 +6,18 @@
 #include "logic.h"
 Book::Book(const uint32_t id) : id(id) {}
 
-void Book::addBuy(const Order &order, Journal& journal, soci::connection_pool& pool) {
+void Book::addBuy(const Order &order, const int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
     const int price = order.getPrice();
     const auto it = buy_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchBuy(*this, journal, pool);
+    matchBuy(*this, stockId, sql, transactionId);
 }
 
-void Book::addSell(const Order &order, Journal& journal, soci::connection_pool& pool) {
+void Book::addSell(const Order &order, const int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
     const int price = order.getPrice();
     const auto it = sell_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchSell(*this, journal, pool);
+    matchSell(*this, stockId, sql, transactionId);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {

@@ -33,6 +33,7 @@ cd CLOB
 mkdir build && cd build
 conan install .. --output-folder=. --build=missing
 ```
+Note: If you are on Windows, make sure Conan uses the MSVC compiler. Use the MSVC compiler for the remaining steps as well.
 5. Install postgreSQL and set up a database for the application. You can follow the instructions on the [PostgreSQL website](https://www.postgresql.org/download/) to install it on your system.
 6. Set up the database schema by running the following command in your terminal, replacing `database_user` and `database_name` with your PostgreSQL username and database name, respectively:
 ```bash

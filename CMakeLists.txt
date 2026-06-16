@@ -21,8 +21,6 @@ add_executable(clob main.cpp
         orderList.h
         transaction.cpp
         transaction.h
-        journal.cpp
-        journal.h
 )
 
 target_link_libraries(clob PRIVATE

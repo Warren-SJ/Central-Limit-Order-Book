@@ -13,7 +13,7 @@ namespace soci {
 class Book;
 class Journal;
 
-void matchBuy(Book &book, Journal &journal, soci::connection_pool& pool);
-void matchSell(Book &book, Journal &journal, soci::connection_pool& pool);
+void matchBuy(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
+void matchSell(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
 
 #endif //CLOB_LOGIC_H

@@ -13,13 +13,13 @@
 
 #include "orderList.h"
 #include "order.h"
-#include "journal.h"
+// #include "journal.h"
 
 class Book {
 public:
     explicit Book(uint32_t id);
-    void addBuy(const Order &order, Journal &journal, soci::connection_pool& pool);
-    void addSell(const Order &order, Journal &journal, soci::connection_pool& pool);
+    void addBuy(const Order &order, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
+    void addSell(const Order &order, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
     uint64_t deleteBuy(uint64_t orderId);
     uint64_t deleteSell(uint64_t orderId);
     void printBook();
