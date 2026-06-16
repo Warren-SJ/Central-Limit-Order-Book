@@ -2,12 +2,15 @@
 // Created by warren on 03-Jun-26.
 //
 
-#include "logic.h"
-#include "transaction.h"
-#include "journal.h"
 #include <algorithm>
+#include <soci/soci.h>
 
-void matchBuy(Book &book, Journal& journal) {
+#include "logic.h"
+#include "book.h"
+#include "journal.h"
+#include "transaction.h"
+
+void matchBuy(Book &book, Journal& journal, soci::connection_pool& pool) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();
@@ -52,7 +55,7 @@ void matchBuy(Book &book, Journal& journal) {
     }
 }
 
-void matchSell(Book &book, Journal& journal) {
+void matchSell(Book &book, Journal& journal, soci::connection_pool& pool) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();

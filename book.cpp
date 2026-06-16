@@ -1,32 +1,23 @@
-//
-// Created by warren on 03-Jun-26.
-//
-
-
 #include <iostream>
-#include <ostream>
 #include <ranges>
 
-#include "journal.h"
 #include "book.h"
+#include "journal.h"
 #include "logic.h"
+Book::Book(const uint32_t id) : id(id) {}
 
-Book::Book(const uint32_t id) : id(id) {
-
-}
-
-void Book::addBuy(const Order &order, Journal& journal) {
+void Book::addBuy(const Order &order, Journal& journal, soci::connection_pool& pool) {
     const int price = order.getPrice();
     const auto it = buy_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchBuy(*this, journal);
+    matchBuy(*this, journal, pool);
 }
 
-void Book::addSell(const Order &order, Journal& journal) {
+void Book::addSell(const Order &order, Journal& journal, soci::connection_pool& pool) {
     const int price = order.getPrice();
     const auto it = sell_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchSell(*this, journal);
+    matchSell(*this, journal, pool);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {
@@ -59,7 +50,7 @@ void Book::printBook() {
     std::cout << "Buy Book:" << std::endl;
     for (auto &val: buy_book | std::views::values) {
         for (const auto &order : *val.getOrders()) {
-            std::cout << " OrderID: " << order.getId() << " Client" << order.getClient() <<  " Price: " << order.getPrice()/100.0 << " Quantity: " << order.getQuantity() << std::endl;
+            std::cout << " OrderID: " << order.getId() << " Client: " << order.getClient() <<  " Price: " << order.getPrice()/100.0 << " Quantity: " << order.getQuantity() << std::endl;
         }
     }
     std::cout << "Sell Book:" << std::endl;
@@ -80,4 +71,8 @@ std::map<int, OrderList, std::less<>>* Book::getSellBook() {
 
 uint32_t Book::getId() const {
     return id;
+}
+
+std::mutex& Book::getMutex() const {
+    return book_mutex;
 }

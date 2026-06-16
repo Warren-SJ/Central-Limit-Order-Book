@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <map>
 #include <unordered_map>
+#include <mutex>
+#include <soci/soci.h>
 
 #include "orderList.h"
 #include "order.h"
@@ -16,16 +18,19 @@
 class Book {
 public:
     explicit Book(uint32_t id);
-    void addBuy(const Order &order, Journal &journal);
-    void addSell(const Order &order, Journal &journal);
+    void addBuy(const Order &order, Journal &journal, soci::connection_pool& pool);
+    void addSell(const Order &order, Journal &journal, soci::connection_pool& pool);
     uint64_t deleteBuy(uint64_t orderId);
     uint64_t deleteSell(uint64_t orderId);
     void printBook();
     std::map<int, OrderList, std::greater<>>* getBuyBook();
     std::map<int, OrderList, std::less<>>* getSellBook();
     [[nodiscard]] uint32_t getId() const;
+    std::mutex& getMutex() const;
+
 private:
     uint32_t id;
+    mutable std::mutex book_mutex;
     std::map<int, OrderList, std::greater<>> buy_book;
     std::map<int, OrderList, std::less<>> sell_book;
     struct orderLocation {

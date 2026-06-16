@@ -7,19 +7,17 @@
 
 #include <chrono>
 #include <cstdint>
-#include <map>
 
 class Transaction {
 public:
     Transaction(uint64_t buyerId, uint64_t sellerId, uint32_t ticker, int quantity, int price);
+private:
     uint64_t buyerId;
     uint64_t sellerId;
     uint32_t ticker;
     int quantity;
     int price;
     std::chrono::system_clock::time_point timestamp;
-// private:
-
 };
 
 

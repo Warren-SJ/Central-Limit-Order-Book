@@ -1,23 +1,27 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <unordered_map>
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <crow.h>
 #include <soci/soci.h>
 #include <soci/postgresql/soci-postgresql.h>
+
 #include "book.h"
 #include "journal.h"
 #include "order.h"
 
-// Add trades table
-
-
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
 
-std::unordered_map<int, Book> books;
-int orderId = 1;
-std::mutex engine_mutex;
+std::unordered_map<int, std::unique_ptr<Book>> books;
+std::shared_mutex books_map_mutex;
+std::atomic<uint64_t> globalOrderId{1};
 
 std::unordered_map<std::string, std::string> loadEnvFile(const std::string& filename) {
+
      std::unordered_map<std::string, std::string> envVars;
      std::ifstream file(filename);
 
@@ -41,26 +45,38 @@ std::unordered_map<std::string, std::string> loadEnvFile(const std::string& file
      return envVars;
  }
 
-int parseSide(const std::string& sideStr) {
+char parseSide(const std::string& sideStr) {
      if (sideStr == "BUY" || sideStr == "buy" || sideStr == "0") {
-         return 0;
+         return 'B';
      }
-     return 1;
+     return 'S';
  }
 
-void addOrder(const Order& order, const int32_t stockId, const int side, Journal& journal) {
-     if (!books.contains(stockId)) {
-         books.emplace(stockId, Book(stockId));
+void addOrder(const Order& order, const int32_t stockId, const int side, Journal& journal, soci::connection_pool& pool) {
+     Book* book_ptr = nullptr;
+     {
+         std::shared_lock lock(books_map_mutex);
+         if (const auto it = books.find(stockId); it != books.end()) {
+             book_ptr = it->second.get();
+         }
      }
 
-     Book& book = books.at(stockId);
+     if (!book_ptr) {
+         std::lock_guard lock(books_map_mutex);
+         if (!books.contains(stockId)) {
+             books.emplace(stockId, std::make_unique<Book>(stockId));
+         }
+         book_ptr = books.at(stockId).get();
+     }
+
+     std::lock_guard book_lock(book_ptr->getMutex());
      if (side == 0) {
-         book.addBuy(order, journal);
+         book_ptr->addBuy(order, journal, pool);
      } else {
-         book.addSell(order, journal);
+         book_ptr->addSell(order, journal, pool);
      }
 
-     book.printBook();
+     book_ptr->printBook();
  }
 
 int main() {
@@ -101,13 +117,25 @@ int main() {
             const auto stockId   = static_cast<int32_t>(json_data["stock"].i());
             const auto clientId  = json_data["client"].i();
             const std::string sideStr = json_data["side"].s();
-            const int side          = parseSide(sideStr);
+            const char side          = parseSide(sideStr);
             const int price         = static_cast<int>(json_data["price"].i());
             const int quantity      = static_cast<int>(json_data["quantity"].i());
 
-            std::lock_guard<std::mutex> lock(engine_mutex);
-            const Order order(orderId++, clientId, stockId, side, price, quantity);
-            addOrder(order, stockId, side, journal);
+            const uint64_t id = globalOrderId.fetch_add(1, std::memory_order_relaxed);
+            const Order order(id, clientId, stockId, side, price, quantity);
+            
+            addOrder(order, stockId, side, journal, pool);
+
+            try {
+                constexpr char status = 'N';
+                sql << "INSERT INTO orders (id, client, ticker, price, original_quantity, remaining_quantity, status, type, timestamp) VALUES "
+                       "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
+                soci::use(id), soci::use(clientId), soci::use(stockId), soci::use(price), soci::use(quantity),
+                soci::use(quantity), soci::use(status), soci::use(side);
+            }
+            catch (const std::exception& e) {
+                std::cerr << "DB Error: " << e.what() << std::endl;
+            }
 
             crow::json::wvalue response_body;
             response_body["status"] = "success";

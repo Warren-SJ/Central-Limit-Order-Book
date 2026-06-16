@@ -5,8 +5,9 @@
 #ifndef CLOB_JOURNAL_H
 #define CLOB_JOURNAL_H
 
+#include <vector>
+#include <cstdint>
 #include "transaction.h"
-
 
 class Journal {
 public:
