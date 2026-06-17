@@ -3,20 +3,20 @@
 //
 
 #include <algorithm>
-#include <soci/soci.h>
 
 #include "logic.h"
 #include "book.h"
 #include "transaction.h"
+#include "dbwriter.h"
 
-void matchBuy(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
+void matchBuy(Book &book, const int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();
 
         if (buyPriceIt->first < sellPriceIt->first) break;
 
-        int price = buyPriceIt->first;
+        const int price = buyPriceIt->first;
 
         auto* buyOrders = buyPriceIt->second.getOrders();
         auto* sellOrders = sellPriceIt->second.getOrders();
@@ -38,21 +38,14 @@ void matchBuy(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint6
 
             const int buyQtyLeft = buyOrder.getQuantity();
             const int sellQtyLeft = sellOrder.getQuantity();
-            char buyStatus = buyQtyLeft == 0 ? 'F' : 'P';
-            char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
+            const char buyStatus = buyQtyLeft == 0 ? 'F' : 'P';
+            const char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
 
-            uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
+            const uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
 
-            //const Transaction transaction(buyClient, sellClient, book.getBuyBook()->begin()->first, fillQty, buyPriceIt->first);
-
-            sql << "INSERT INTO trades (id, buyer, seller, price, quantity, ticker, timestamp) VALUES (:id, :buyer, :seller, :price, :quantity, :ticker, :NOW())",
-                soci::use(currentTradeId), soci::use(buyClient), soci::use(sellClient), soci::use(price), soci::use(fillQty), soci::use(stockId);
-
-            sql <<"UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
-            soci::use(buyQtyLeft), soci::use(buyStatus), soci::use(buyId), soci::use(buyClient);
-
-            sql <<"UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
-            soci::use(buyQtyLeft), soci::use(sellStatus), soci::use(sellId), soci::use(sellClient);
+            dbWriter.push({DbTask::INSERT_TRADE, 0, currentTradeId, buyClient, sellClient, price, fillQty, static_cast<uint32_t>(stockId)});
+            dbWriter.push({DbTask::UPDATE_ORDER, buyId, 0, 0, 0, 0, buyQtyLeft, 0, 0, buyStatus});
+            dbWriter.push({DbTask::UPDATE_ORDER, sellId, 0, 0, 0, 0, sellQtyLeft, 0, 0, sellStatus});
 
             if (buyQtyLeft == 0) {
                 book.deleteBuy(buyId);
@@ -67,14 +60,14 @@ void matchBuy(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint6
     }
 }
 
-void matchSell(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
+void matchSell(Book &book, const int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();
 
         if (buyPriceIt->first < sellPriceIt->first) break;
 
-        int price = buyPriceIt->first;
+        const int price = buyPriceIt->first;
 
         auto* buyOrders = buyPriceIt->second.getOrders();
         auto* sellOrders = sellPriceIt->second.getOrders();
@@ -97,21 +90,14 @@ void matchSell(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint
 
             const int buyQtyLeft = buyOrder.getQuantity();
             const int sellQtyLeft = sellOrder.getQuantity();
-            char buyStatus = buyQtyLeft == 0 ? 'F' : 'P';
-            char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
+            const char buyStatus = buyQtyLeft == 0 ? 'F' : 'P';
+            const char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
 
-            uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
+            const uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
 
-            //const Transaction transaction(buyClient, sellClient, book.getId(), fillQty, sellPriceIt->first);
-
-            sql << "INSERT INTO trades (id, buyer, seller, price, quantity, ticker, timestamp) VALUES (:id, :buyer, :seller, :price, :quantity, :ticker, NOW())",
-            soci::use(currentTradeId), soci::use(buyClient), soci::use(sellClient), soci::use(price), soci::use(fillQty), soci::use(stockId);
-
-            sql <<"UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
-            soci::use(buyQtyLeft), soci::use(buyStatus), soci::use(buyId);
-
-            sql <<"UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
-            soci::use(buyQtyLeft), soci::use(sellStatus), soci::use(sellId);
+            dbWriter.push({DbTask::INSERT_TRADE, 0, currentTradeId, buyClient, sellClient, price, fillQty, static_cast<uint32_t>(stockId)});
+            dbWriter.push({DbTask::UPDATE_ORDER, buyId, 0, 0, 0, 0, buyQtyLeft, 0, 0, buyStatus});
+            dbWriter.push({DbTask::UPDATE_ORDER, sellId, 0, 0, 0, 0, sellQtyLeft, 0, 0, sellStatus});
 
             if (buyQtyLeft == 0) {
                 book.deleteBuy(buyId);

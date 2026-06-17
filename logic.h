@@ -5,15 +5,11 @@
 
 #ifndef CLOB_LOGIC_H
 #define CLOB_LOGIC_H
+#include "book.h"
 
-namespace soci {
-    class connection_pool;
-}
+class DbWriter;
 
-class Book;
-class Journal;
-
-void matchBuy(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
-void matchSell(Book &book, int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId);
+void matchBuy(Book &book, int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
+void matchSell(Book &book, int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
 
 #endif //CLOB_LOGIC_H

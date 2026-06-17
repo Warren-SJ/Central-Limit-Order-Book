@@ -21,6 +21,8 @@ add_executable(clob main.cpp
         orderList.h
         transaction.cpp
         transaction.h
+        dbwriter.cpp
+        dbwriter.h
 )
 
 target_link_libraries(clob PRIVATE

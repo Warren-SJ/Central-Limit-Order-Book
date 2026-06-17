@@ -12,13 +12,14 @@
 
 #include "book.h"
 #include "order.h"
+#include "dbwriter.h"
 
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
 
 std::unordered_map<int, std::unique_ptr<Book>> books;
 std::shared_mutex books_map_mutex;
-std::atomic<uint64_t> globalOrderId{1};
-std::atomic<uint64_t> globalTransactionId{1};
+std::atomic<uint64_t> globalOrderId;
+std::atomic<uint64_t> globalTransactionId;
 
 std::unordered_map<std::string, std::string> loadEnvFile(const std::string& filename) {
 
@@ -52,7 +53,7 @@ char parseSide(const std::string& sideStr) {
      return 'S';
  }
 
-void addOrder(const Order& order, const int32_t stockId, const int side, soci::session& sql, std::atomic<uint64_t>& transactionId) {
+void addOrder(const Order& order, const int32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
      Book* book_ptr = nullptr;
      {
          std::shared_lock lock(books_map_mutex);
@@ -71,9 +72,9 @@ void addOrder(const Order& order, const int32_t stockId, const int side, soci::s
 
      std::lock_guard book_lock(book_ptr->getMutex());
      if (side == 'B') {
-         book_ptr->addBuy(order, stockId, sql, transactionId);
+         book_ptr->addBuy(order, stockId, dbWriter, transactionId);
      } else {
-         book_ptr->addSell(order, stockId, sql, transactionId);
+         book_ptr->addSell(order, stockId, dbWriter, transactionId);
      }
 
      book_ptr->printBook();
@@ -101,10 +102,21 @@ int main() {
         pool.at(i).open(backEnd,conn);
     }
 
+    uint64_t orderId = 0;
+    uint64_t transactionId = 0;
+    soci::session sql_session(pool);
+    sql_session << "SELECT id FROM orders ORDER BY id DESC LIMIT 1", soci::into(orderId);
+    sql_session << "SELECT id FROM trades ORDER BY id DESC LIMIT 1", soci::into(transactionId);
+    globalOrderId.store(orderId);
+    globalTransactionId.store(transactionId);
+    std::cout << "Starting server with globalOrderId: " << globalOrderId.load() << " and globalTransactionId: " << globalTransactionId.load() << std::endl;
+    sql_session.close();
+
+    DbWriter dbWriter(pool);
+
     crow::SimpleApp app;
 
-    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&pool](const crow::request& req) {
-        soci::session sql(pool);
+    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&dbWriter](const crow::request& req) {
         const auto json_data = crow::json::load(req.body);
 
         if (!json_data) {
@@ -113,29 +125,23 @@ int main() {
 
         try {
             const auto stockId   = static_cast<int32_t>(json_data["stock"].i());
-            const auto clientId  = json_data["client"].i();
+            const auto clientId  = static_cast<uint64_t>(json_data["client"].i());
             const std::string sideStr = json_data["side"].s();
             const char side          = parseSide(sideStr);
             const int price         = static_cast<int>(json_data["price"].i());
             const int quantity      = static_cast<int>(json_data["quantity"].i());
 
-            const uint64_t id = globalOrderId.fetch_add(1, std::memory_order_relaxed);
-            const Order order(id, clientId, stockId, side, price, quantity);
+            const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
+            const uint64_t newTransactionId = globalTransactionId.fetch_add(1, std::memory_order_relaxed);
 
-            soci::transaction tr(sql);
+            const Order order(newOrderId, clientId, stockId, side, price, quantity);
 
             try {
-                addOrder(order, stockId, side, sql, globalTransactionId);
-                constexpr char status = 'N';
-                sql << "INSERT INTO orders (id, client, ticker, price, original_quantity, remaining_quantity, status, type, timestamp) VALUES "
-                "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
-                soci::use(id), soci::use(clientId), soci::use(stockId), soci::use(price), soci::use(quantity),
-                soci::use(quantity), soci::use(status), soci::use(side);
-                tr.commit();
+                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
+                addOrder(order, stockId, side, dbWriter, globalTransactionId);
                 return crow::response(200, "Order processed!");
             }
             catch (const std::exception& e) {
-                tr.rollback();
                 return crow::response(400, e.what());
             }
 

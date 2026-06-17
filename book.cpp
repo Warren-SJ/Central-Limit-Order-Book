@@ -4,20 +4,21 @@
 #include "book.h"
 #include "journal.h"
 #include "logic.h"
+#include "order.h"
 Book::Book(const uint32_t id) : id(id) {}
 
-void Book::addBuy(const Order &order, const int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
+void Book::addBuy(const Order &order, const int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
     const int price = order.getPrice();
     const auto it = buy_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchBuy(*this, stockId, sql, transactionId);
+    matchBuy(*this, stockId, dbWriter, transactionId);
 }
 
-void Book::addSell(const Order &order, const int32_t stockId, soci::session& sql, std::atomic<uint64_t>& transactionId) {
+void Book::addSell(const Order &order, const int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
     const int price = order.getPrice();
     const auto it = sell_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchSell(*this, stockId, sql, transactionId);
+    matchSell(*this, stockId, dbWriter, transactionId);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {
