@@ -140,6 +140,7 @@ int main() {
     DbWriter dbWriter(pool);
 
     crow::SimpleApp app;
+    app.loglevel(crow::LogLevel::Warning);
 
     CROW_ROUTE(app, "/api/order/add").methods(crow::HTTPMethod::POST)([&dbWriter](const crow::request& req) {
         const auto json_data = crow::json::load(req.body);
