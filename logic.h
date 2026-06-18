@@ -9,7 +9,7 @@
 
 class DbWriter;
 
-void matchBuy(Book &book, int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
-void matchSell(Book &book, int32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
+void matchBuy(Book &book, uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
+void matchSell(Book &book, uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId);
 
 #endif //CLOB_LOGIC_H

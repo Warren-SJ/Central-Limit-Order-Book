@@ -22,7 +22,7 @@ DbWriter::~DbWriter() {
 
 void DbWriter::push(const DbTask &dbTask) {
     {
-        std::lock_guard<std::mutex> lock(dbMutex);
+        std::unique_lock<std::mutex> lock(dbMutex);
         taskQueue.push(dbTask);
     }
     cv.notify_one();
@@ -51,9 +51,12 @@ void DbWriter::processQueue() {
                        "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
                     soci::use(task.orderId), soci::use(task.buyerId), soci::use(task.stockId), soci::use(task.price), soci::use(task.quantity),
                     soci::use(task.quantity), soci::use(task.status), soci::use(task.side);
-            } else if (task.type == DbTask::UPDATE_ORDER) {
+            } else if (task.type == DbTask::UPDATE_ORDER_QUANTITY) {
                 sql << "UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
                     soci::use(task.quantity), soci::use(task.status), soci::use(task.orderId);
+            } else if (task.type == DbTask::UPDATE_ORDER_STATUS) {
+                sql << "UPDATE orders SET status = :status WHERE id = :id ",
+                    soci::use(task.status), soci::use(task.orderId);
             }
         }
         catch (const std::exception& e) {

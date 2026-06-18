@@ -16,7 +16,7 @@
 
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
 
-std::unordered_map<int, std::unique_ptr<Book>> books;
+std::unordered_map<uint32_t, std::unique_ptr<Book>> books;
 std::shared_mutex books_map_mutex;
 std::atomic<uint64_t> globalOrderId;
 std::atomic<uint64_t> globalTransactionId;
@@ -53,7 +53,7 @@ char parseSide(const std::string& sideStr) {
      return 'S';
  }
 
-void addOrder(const Order& order, const int32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
      Book* book_ptr = nullptr;
      {
          std::shared_lock lock(books_map_mutex);
@@ -76,12 +76,37 @@ void addOrder(const Order& order, const int32_t stockId, const int side, DbWrite
      } else {
          book_ptr->addSell(order, stockId, dbWriter, transactionId);
      }
-
-     book_ptr->printBook();
  }
 
-int main() {
+void deleteOrder(const uint64_t orderId, const uint32_t stockId, const char side) {
+    Book* book_ptr = nullptr;
+    {
+        std::shared_lock lock(books_map_mutex);
+        if (const auto it = books.find(stockId); it != books.end()) {
+            book_ptr = it->second.get();
+        }
+    }
+    if (!book_ptr) return;
+    std::lock_guard lock(book_ptr->getMutex());
+    if (side == 'B') {
+        book_ptr->deleteBuy(orderId);
+    } else {
+        book_ptr->deleteSell(orderId);
+    }
+}
 
+bool fetchOrderInfo(soci::connection_pool& pool, uint64_t orderId, uint32_t& stockId, char& side, uint64_t& client) {
+    try {
+        soci::session sql(pool);
+        sql << "SELECT ticker, type, client FROM orders WHERE id = :id",
+            soci::into(stockId), soci::into(side), soci::into(client), soci::use(orderId);
+        return (stockId != 0 && side != '\0');
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+int main() {
     auto env = loadEnvFile("../../.env");
     if (env.empty() || !env.contains("DB_USERNAME") || !env.contains("DB_PASSWORD") || !env.contains("DB_HOST") || !env.contains("DB_PORT")) {
         std::cerr << "CRITICAL ERROR: Failed to load environment variables from '../../.env'!" << std::endl;
@@ -102,13 +127,13 @@ int main() {
         pool.at(i).open(backEnd,conn);
     }
 
-    uint64_t orderId = 0;
-    uint64_t transactionId = 0;
+    uint64_t tempOrderId = 0;
+    uint64_t tempTransactionId = 0;
     soci::session sql_session(pool);
-    sql_session << "SELECT id FROM orders ORDER BY id DESC LIMIT 1", soci::into(orderId);
-    sql_session << "SELECT id FROM trades ORDER BY id DESC LIMIT 1", soci::into(transactionId);
-    globalOrderId.store(orderId);
-    globalTransactionId.store(transactionId);
+    sql_session << "SELECT id FROM orders ORDER BY id DESC LIMIT 1", soci::into(tempOrderId);
+    sql_session << "SELECT id FROM trades ORDER BY id DESC LIMIT 1", soci::into(tempTransactionId);
+    globalOrderId.store(tempOrderId + 1);
+    globalTransactionId.store(tempTransactionId + 1);
     std::cout << "Starting server with globalOrderId: " << globalOrderId.load() << " and globalTransactionId: " << globalTransactionId.load() << std::endl;
     sql_session.close();
 
@@ -116,7 +141,7 @@ int main() {
 
     crow::SimpleApp app;
 
-    CROW_ROUTE(app, "/api/order").methods(crow::HTTPMethod::POST)([&dbWriter](const crow::request& req) {
+    CROW_ROUTE(app, "/api/order/add").methods(crow::HTTPMethod::POST)([&dbWriter](const crow::request& req) {
         const auto json_data = crow::json::load(req.body);
 
         if (!json_data) {
@@ -124,7 +149,7 @@ int main() {
         }
 
         try {
-            const auto stockId   = static_cast<int32_t>(json_data["stock"].i());
+            const auto stockId   = static_cast<uint32_t>(json_data["stock"].i());
             const auto clientId  = static_cast<uint64_t>(json_data["client"].i());
             const std::string sideStr = json_data["side"].s();
             const char side          = parseSide(sideStr);
@@ -132,13 +157,11 @@ int main() {
             const int quantity      = static_cast<int>(json_data["quantity"].i());
 
             const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
-            const uint64_t newTransactionId = globalTransactionId.fetch_add(1, std::memory_order_relaxed);
-
-            const Order order(newOrderId, clientId, stockId, side, price, quantity);
 
             try {
-                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
+                const Order order(newOrderId, clientId, stockId, side, price, quantity);
                 addOrder(order, stockId, side, dbWriter, globalTransactionId);
+                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
                 return crow::response(200, "Order processed!");
             }
             catch (const std::exception& e) {
@@ -150,5 +173,43 @@ int main() {
             return crow::response(400, e.what());
         }
     });
+
+    CROW_ROUTE(app, "/api/order/edit/<uint>").methods(crow::HTTPMethod::PATCH)([&dbWriter, &pool](const crow::request& req, const uint64_t orderId) {
+
+        const auto json_data = crow::json::load(req.body);
+
+        if (!json_data) {
+            return crow::response(400, "Invalid JSON payload");
+        }
+
+        try {
+            const int price         = static_cast<int>(json_data["price"].i());
+            const int quantity      = static_cast<int>(json_data["quantity"].i());
+            try {
+                uint64_t client;
+                char side;
+                uint32_t stockId;
+                if (!fetchOrderInfo(pool, orderId, stockId, side, client)) {
+                    return crow::response(404, "Order not found");
+                }
+                dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, quantity, 0, 0, 'C'});
+                deleteOrder(orderId, stockId, side);
+
+                const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
+                const Order order(newOrderId, client, stockId, side, price, quantity);
+                addOrder(order, stockId, side, dbWriter, globalTransactionId);
+                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, client, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
+                return crow::response(200, "Order processed!");
+            }
+            catch (const std::exception& e) {
+                return crow::response(400, e.what());
+            }
+
+        }
+        catch (const std::exception& e) {
+            return crow::response(400, e.what());
+        }
+    });
+
     app.port(8080).multithreaded().run();
 }

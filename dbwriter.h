@@ -13,7 +13,7 @@
 #include <soci/soci.h>
 
 struct DbTask {
-    enum Type {INSERT_TRADE, INSERT_ORDER, UPDATE_ORDER} type;
+    enum Type {INSERT_TRADE, INSERT_ORDER, UPDATE_ORDER_QUANTITY, UPDATE_ORDER_STATUS} type;
     uint64_t orderId;
     uint64_t transactionID;
     uint64_t buyerId;
