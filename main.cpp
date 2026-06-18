@@ -78,7 +78,7 @@ void addOrder(const Order& order, const uint32_t stockId, const int side, DbWrit
      }
  }
 
-void deleteOrder(const uint64_t orderId, const uint32_t stockId, const char side) {
+bool deleteOrder(const uint64_t orderId, const uint32_t stockId, const char side) {
     Book* book_ptr = nullptr;
     {
         std::shared_lock lock(books_map_mutex);
@@ -86,20 +86,20 @@ void deleteOrder(const uint64_t orderId, const uint32_t stockId, const char side
             book_ptr = it->second.get();
         }
     }
-    if (!book_ptr) return;
+    if (!book_ptr) return false;
     std::lock_guard lock(book_ptr->getMutex());
     if (side == 'B') {
-        book_ptr->deleteBuy(orderId);
+        return book_ptr->deleteBuy(orderId) != 0;
     } else {
-        book_ptr->deleteSell(orderId);
+        return book_ptr->deleteSell(orderId) != 0;
     }
 }
 
-bool fetchOrderInfo(soci::connection_pool& pool, uint64_t orderId, uint32_t& stockId, char& side, uint64_t& client) {
+bool fetchOrderInfo(soci::connection_pool& pool, uint64_t orderId, uint32_t& stockId, char& side, uint64_t& client, char& status) {
     try {
         soci::session sql(pool);
-        sql << "SELECT ticker, type, client FROM orders WHERE id = :id",
-            soci::into(stockId), soci::into(side), soci::into(client), soci::use(orderId);
+        sql << "SELECT ticker, type, client, status FROM orders WHERE id = :id",
+            soci::into(stockId), soci::into(side), soci::into(client), soci::into(status), soci::use(orderId);
         return (stockId != 0 && side != '\0');
     } catch (const std::exception&) {
         return false;
@@ -190,11 +190,17 @@ int main() {
                 uint64_t client;
                 char side;
                 uint32_t stockId;
-                if (!fetchOrderInfo(pool, orderId, stockId, side, client)) {
+                char status;
+                if (!fetchOrderInfo(pool, orderId, stockId, side, client, status)) {
                     return crow::response(404, "Order not found");
                 }
-                dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, quantity, 0, 0, 'C'});
-                deleteOrder(orderId, stockId, side);
+                if (status == 'F' || status == 'C') {
+                    return crow::response(400, "Cannot edit a filled or cancelled order");
+                }
+                if (!deleteOrder(orderId, stockId, side)) {
+                    return crow::response(400, "Order already filled or cancelled");
+                }
+                dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, 0, 0, 0, 'C'});
 
                 const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
                 const Order order(newOrderId, client, stockId, side, price, quantity);
@@ -211,6 +217,30 @@ int main() {
             return crow::response(400, e.what());
         }
     });
+
+    CROW_ROUTE(app, "/api/order/delete/<uint>").methods(crow::HTTPMethod::Delete)([&dbWriter, &pool](const uint64_t orderId) {
+    try {
+        char side;
+        uint32_t stockId;
+        char status;
+        if (uint64_t client; !fetchOrderInfo(pool, orderId, stockId, side, client, status)) {
+            return crow::response(404, "Order not found");
+        }
+        if (status == 'F' || status == 'C') {
+            return crow::response(400, "Cannot delete a filled or cancelled order");
+        }
+        if (!deleteOrder(orderId, stockId, side)) {
+            return crow::response(400, "Order already filled or cancelled");
+        }
+        dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, 0, 0, 0, 'C'});
+
+        return crow::response(200, "Order processed!");
+    }
+    catch (const std::exception& e) {
+        return crow::response(400, e.what());
+    }
+
+});
 
     app.port(8080).multithreaded().run();
 }
