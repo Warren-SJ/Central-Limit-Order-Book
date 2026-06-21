@@ -13,13 +13,16 @@
 #include "book.h"
 #include "order.h"
 #include "dbwriter.h"
+#include "orderLocation.h"
 
 soci::backend_factory const &backEnd = *soci::factory_postgresql();
 
 std::unordered_map<uint32_t, std::unique_ptr<Book>> books;
 std::shared_mutex books_map_mutex;
+std::shared_mutex order_locations_mutex;
 std::atomic<uint64_t> globalOrderId;
 std::atomic<uint64_t> globalTransactionId;
+std::unordered_map<uint64_t, OrderLocation> orderLocations;
 
 std::unordered_map<std::string, std::string> loadEnvFile(const std::string& filename) {
 
@@ -53,7 +56,7 @@ char parseSide(const std::string& sideStr) {
      return 'S';
  }
 
-void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
      Book* book_ptr = nullptr;
      {
          std::shared_lock lock(books_map_mutex);
@@ -72,9 +75,9 @@ void addOrder(const Order& order, const uint32_t stockId, const int side, DbWrit
 
      std::lock_guard book_lock(book_ptr->getMutex());
      if (side == 'B') {
-         book_ptr->addBuy(order, stockId, dbWriter, transactionId);
+         book_ptr->addBuy(order, stockId, dbWriter, transactionId, orderMutex, locations);
      } else {
-         book_ptr->addSell(order, stockId, dbWriter, transactionId);
+         book_ptr->addSell(order, stockId, dbWriter, transactionId, orderMutex, locations);
      }
  }
 
@@ -95,13 +98,18 @@ bool deleteOrder(const uint64_t orderId, const uint32_t stockId, const char side
     }
 }
 
-bool fetchOrderInfo(soci::connection_pool& pool, uint64_t orderId, uint32_t& stockId, char& side, uint64_t& client, char& status) {
+bool fetchOrderInfo(const uint64_t orderId, uint32_t& stockId, char& side, uint64_t& client, char& status) {
+    std::shared_lock lock(order_locations_mutex);
     try {
-        soci::session sql(pool);
-        sql << "SELECT ticker, type, client, status FROM orders WHERE id = :id",
-            soci::into(stockId), soci::into(side), soci::into(client), soci::into(status), soci::use(orderId);
-        return (stockId != 0 && side != '\0');
-    } catch (const std::exception&) {
+        const OrderLocation location = orderLocations.at(orderId);
+        stockId = location.stockId;
+        side = location.side;
+        client = location.clientId;
+        status = location.status;
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cout << e.what() << std::endl;
         return false;
     }
 }
@@ -161,7 +169,12 @@ int main() {
 
             try {
                 const Order order(newOrderId, clientId, stockId, side, price, quantity);
-                addOrder(order, stockId, side, dbWriter, globalTransactionId);
+                {
+                    const OrderLocation newLocation(stockId, clientId, side, 'N');
+                    std::unique_lock lock(order_locations_mutex);
+                    orderLocations.insert({newOrderId, newLocation});
+                }
+                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations);
                 dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
                 return crow::response(200, "Order processed!");
             }
@@ -175,7 +188,7 @@ int main() {
         }
     });
 
-    CROW_ROUTE(app, "/api/order/edit/<uint>").methods(crow::HTTPMethod::PATCH)([&dbWriter, &pool](const crow::request& req, const uint64_t orderId) {
+    CROW_ROUTE(app, "/api/order/edit/<uint>").methods(crow::HTTPMethod::PATCH)([&dbWriter](const crow::request& req, const uint64_t orderId) {
 
         const auto json_data = crow::json::load(req.body);
 
@@ -187,11 +200,11 @@ int main() {
             const int price         = static_cast<int>(json_data["price"].i());
             const int quantity      = static_cast<int>(json_data["quantity"].i());
             try {
-                uint64_t client;
+                uint64_t clientId;
                 char side;
                 uint32_t stockId;
                 char status;
-                if (!fetchOrderInfo(pool, orderId, stockId, side, client, status)) {
+                if (!fetchOrderInfo(orderId, stockId, side, clientId, status)) {
                     return crow::response(404, "Order not found");
                 }
                 if (status == 'F' || status == 'C') {
@@ -200,12 +213,21 @@ int main() {
                 if (!deleteOrder(orderId, stockId, side)) {
                     return crow::response(400, "Order already filled or cancelled");
                 }
+                {
+                    std::unique_lock lock(order_locations_mutex);
+                    orderLocations.erase(orderId);
+                }
                 dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, 0, 0, 0, 'C'});
 
                 const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
-                const Order order(newOrderId, client, stockId, side, price, quantity);
-                addOrder(order, stockId, side, dbWriter, globalTransactionId);
-                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, client, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
+                const Order order(newOrderId, clientId, stockId, side, price, quantity);
+                {
+                    const OrderLocation newLocation(stockId, clientId, side, 'N');
+                    std::unique_lock lock(order_locations_mutex);
+                    orderLocations.insert({newOrderId, newLocation});
+                }
+                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations);
+                dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
                 return crow::response(200, "Order processed!");
             }
             catch (const std::exception& e) {
@@ -218,12 +240,12 @@ int main() {
         }
     });
 
-    CROW_ROUTE(app, "/api/order/delete/<uint>").methods(crow::HTTPMethod::Delete)([&dbWriter, &pool](const uint64_t orderId) {
+    CROW_ROUTE(app, "/api/order/delete/<uint>").methods(crow::HTTPMethod::Delete)([&dbWriter](const uint64_t orderId) {
     try {
         char side;
         uint32_t stockId;
         char status;
-        if (uint64_t client; !fetchOrderInfo(pool, orderId, stockId, side, client, status)) {
+        if (uint64_t client; !fetchOrderInfo(orderId, stockId, side, client, status)) {
             return crow::response(404, "Order not found");
         }
         if (status == 'F' || status == 'C') {
@@ -231,6 +253,10 @@ int main() {
         }
         if (!deleteOrder(orderId, stockId, side)) {
             return crow::response(400, "Order already filled or cancelled");
+        }
+        {
+            std::unique_lock lock(order_locations_mutex);
+            orderLocations.erase(orderId);
         }
         dbWriter.push({DbTask::UPDATE_ORDER_STATUS, orderId, 0, 0, 0, 0, 0, 0, 0, 'C'});
 

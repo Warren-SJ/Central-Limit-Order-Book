@@ -2,23 +2,29 @@
 #include <ranges>
 
 #include "book.h"
+
+#include <shared_mutex>
+
 #include "journal.h"
 #include "logic.h"
 #include "order.h"
+
 Book::Book(const uint32_t id) : id(id) {}
 
-void Book::addBuy(const Order &order, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void Book::addBuy(const Order &order, const uint32_t stockId, DbWriter &dbWriter, std::atomic<uint64_t> &transactionId,
+                  std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
     const int price = order.getPrice();
     const auto it = buy_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchBuy(*this, stockId, dbWriter, transactionId);
+    matchBuy(*this, stockId, dbWriter, transactionId, orderMutex, locations);
 }
 
-void Book::addSell(const Order &order, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void Book::addSell(const Order &order, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId,
+    std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
     const int price = order.getPrice();
     const auto it = sell_book[price].addOrder(order);
     order_lookup[order.getId()] = {price, it};
-    matchSell(*this, stockId, dbWriter, transactionId);
+    matchSell(*this, stockId, dbWriter, transactionId,  orderMutex, locations);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {

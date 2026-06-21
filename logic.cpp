@@ -9,7 +9,7 @@
 #include "transaction.h"
 #include "dbwriter.h"
 
-void matchBuy(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void matchBuy(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();
@@ -42,7 +42,11 @@ void matchBuy(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomi
             const char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
 
             const uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
-
+            {
+                std::unique_lock<std::shared_mutex> lock(orderMutex);
+                locations.at(buyId).status = buyStatus;
+                locations.at(sellId).status = sellStatus;
+            }
             dbWriter.push({DbTask::INSERT_TRADE, 0, currentTradeId, buyClient, sellClient, price, fillQty, static_cast<uint32_t>(stockId)});
             dbWriter.push({DbTask::UPDATE_ORDER_QUANTITY, buyId, 0, 0, 0, 0, buyQtyLeft, 0, 0, buyStatus});
             dbWriter.push({DbTask::UPDATE_ORDER_QUANTITY, sellId, 0, 0, 0, 0, sellQtyLeft, 0, 0, sellStatus});
@@ -60,7 +64,7 @@ void matchBuy(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomi
     }
 }
 
-void matchSell(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId) {
+void matchSell(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
     while (!book.getBuyBook()->empty() && !book.getSellBook()->empty()) {
         const auto buyPriceIt = book.getBuyBook()->begin();
         const auto sellPriceIt = book.getSellBook()->begin();
@@ -94,6 +98,11 @@ void matchSell(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atom
             const char sellStatus = sellQtyLeft == 0 ? 'F' : 'P';
 
             const uint64_t currentTradeId = transactionId.fetch_add(1, std::memory_order_relaxed);
+            {
+                std::unique_lock<std::shared_mutex> lock(orderMutex);
+                locations.at(buyId).status = buyStatus;
+                locations.at(sellId).status = sellStatus;
+            }
 
             dbWriter.push({DbTask::INSERT_TRADE, 0, currentTradeId, buyClient, sellClient, price, fillQty, static_cast<uint32_t>(stockId)});
             dbWriter.push({DbTask::UPDATE_ORDER_QUANTITY, buyId, 0, 0, 0, 0, buyQtyLeft, 0, 0, buyStatus});

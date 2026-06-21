@@ -23,6 +23,7 @@ add_executable(clob main.cpp
         transaction.h
         dbwriter.cpp
         dbwriter.h
+        orderLocation.h
 )
 
 target_link_libraries(clob PRIVATE
