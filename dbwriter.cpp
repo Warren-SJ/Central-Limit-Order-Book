@@ -31,33 +31,41 @@ void DbWriter::push(const DbTask &dbTask) {
 void DbWriter::processQueue() {
     soci::session sql(pool);
     while (true) {
-        DbTask task{};
+        std::vector<DbTask> tasks;
         {
             std::unique_lock<std::mutex> lock(dbMutex);
             cv.wait(lock, [this] { return !taskQueue.empty() || stop; });
 
             if (stop && taskQueue.empty()) break;
 
-            task = taskQueue.front();
-            taskQueue.pop();
+            while (!taskQueue.empty()) {
+                tasks.push_back(taskQueue.front());
+                taskQueue.pop();
+            }
         }
 
+        if (tasks.empty()) continue;
+
         try {
-            if (task.type == DbTask::INSERT_TRADE) {
-                sql << "INSERT INTO trades (id, buyer, seller, price, quantity, ticker, timestamp) VALUES (:id, :buyer, :seller, :price, :quantity, :ticker, NOW())",
-                    soci::use(task.transactionID), soci::use(task.buyerId), soci::use(task.sellerId), soci::use(task.price), soci::use(task.quantity), soci::use(task.stockId);
-            } else if (task.type == DbTask::INSERT_ORDER) {
-                sql << "INSERT INTO orders (id, client, ticker, price, original_quantity, remaining_quantity, status, type, timestamp) VALUES "
-                       "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
-                    soci::use(task.orderId), soci::use(task.buyerId), soci::use(task.stockId), soci::use(task.price), soci::use(task.quantity),
-                    soci::use(task.quantity), soci::use(task.status), soci::use(task.side);
-            } else if (task.type == DbTask::UPDATE_ORDER_QUANTITY) {
-                sql << "UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
-                    soci::use(task.quantity), soci::use(task.status), soci::use(task.orderId);
-            } else if (task.type == DbTask::UPDATE_ORDER_STATUS) {
-                sql << "UPDATE orders SET status = :status WHERE id = :id ",
-                    soci::use(task.status), soci::use(task.orderId);
+            soci::transaction tr(sql);
+            for (const auto&[type, orderId, transactionID, buyerId, sellerId, price, quantity, stockId, side, status] : tasks) {
+                if (type == DbTask::INSERT_TRADE) {
+                    sql << "INSERT INTO trades (id, buyer, seller, price, quantity, ticker, timestamp) VALUES (:id, :buyer, :seller, :price, :quantity, :ticker, NOW())",
+                        soci::use(transactionID), soci::use(buyerId), soci::use(sellerId), soci::use(price), soci::use(quantity), soci::use(stockId);
+                } else if (type == DbTask::INSERT_ORDER) {
+                    sql << "INSERT INTO orders (id, client, ticker, price, original_quantity, remaining_quantity, status, type, timestamp) VALUES "
+                           "(:id, :client, :ticker, :price, :original_quantity, :remaining_quantity, :status, :type, NOW())",
+                        soci::use(orderId), soci::use(buyerId), soci::use(stockId), soci::use(price), soci::use(quantity),
+                        soci::use(quantity), soci::use(status), soci::use(side);
+                } else if (type == DbTask::UPDATE_ORDER_QUANTITY) {
+                    sql << "UPDATE orders SET remaining_quantity = :remaining_quantity, status = :status WHERE id = :id ",
+                        soci::use(quantity), soci::use(status), soci::use(orderId);
+                } else if (type == DbTask::UPDATE_ORDER_STATUS) {
+                    sql << "UPDATE orders SET status = :status WHERE id = :id ",
+                        soci::use(status), soci::use(orderId);
+                }
             }
+            tr.commit();
         }
         catch (const std::exception& e) {
             std::cerr << "Database operation failed: " << e.what() << std::endl;
