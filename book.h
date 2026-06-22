@@ -16,6 +16,8 @@
 #include "orderList.h"
 #include "orderLocation.h"
 
+#include <memory_resource>
+
 class DbWriter;
 
 class Book {
@@ -28,21 +30,23 @@ public:
     uint64_t deleteBuy(uint64_t orderId);
     uint64_t deleteSell(uint64_t orderId);
     void printBook();
-    std::map<int, OrderList, std::greater<>>* getBuyBook();
-    std::map<int, OrderList, std::less<>>* getSellBook();
+    std::pmr::map<int, OrderList, std::greater<>>* getBuyBook();
+    std::pmr::map<int, OrderList, std::less<>>* getSellBook();
     [[nodiscard]] uint32_t getId() const;
     std::mutex& getMutex() const;
 
 private:
     uint32_t id;
     mutable std::mutex book_mutex;
-    std::map<int, OrderList, std::greater<>> buy_book;
-    std::map<int, OrderList, std::less<>> sell_book;
+    std::pmr::unsynchronized_pool_resource pool;
+    std::pmr::map<int, OrderList, std::greater<>> buy_book;
+    std::pmr::map<int, OrderList, std::less<>> sell_book;
     struct orderTracker {
-        int price = 0;
-        std::list<Order>::iterator it;
+        OrderList* orderListPtr;
+        std::pmr::list<Order>::iterator orderIt;
+        int price;
     };
-    std::unordered_map<uint64_t, orderTracker> order_lookup;
+    std::pmr::unordered_map<uint64_t, orderTracker> order_lookup;
 };
 
 #endif //CLOB_BOOK_H

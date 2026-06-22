@@ -4,7 +4,7 @@ project(clob)
 set(CMAKE_CXX_STANDARD 23)
 
 list(APPEND CMAKE_PREFIX_PATH
-        "${CMAKE_BINARY_DIR}/build/Debug/generators"
+        "${CMAKE_BINARY_DIR}/build/Release/generators"
 )
 
 find_package(Crow CONFIG REQUIRED)
