@@ -35,7 +35,8 @@ private:
     void processQueue();
     soci::connection_pool& pool;
     std::queue<DbTask> taskQueue;
-    std::thread worker;
+    std::vector<std::thread> workers;
+    const int NUM_THREADS = 8;
     std::mutex dbMutex;
     std::condition_variable cv;
     bool stop;
