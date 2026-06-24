@@ -35,10 +35,61 @@ void DbWriter::push(const DbTask &dbTask) {
 
 void DbWriter::processQueue() {
     soci::session sql(pool);
+    constexpr int maxBatchSize = 5000;
+
+    std::vector<uint64_t> tradeIds, orderIds, tradeBuyers, tradeSellers, insertOrderIds, orderBuyers;
+    std::vector<uint32_t> tradeStockIds, orderStockIds, updateOrderQuantityIds, updateOrderStatusIds;
+    std::vector<int> tradePrices, tradeQuantities, orderPrices, orderQuantities, updateOrderQuantities;
+    std::vector<char> tradeStatus, tradeType, orderStatuses, orderSides, updateOrderStatuses, updateOrderQuantityStatuses;
+
+    tradeIds.reserve(maxBatchSize);
+    orderIds.reserve(maxBatchSize);
+    tradeBuyers.reserve(maxBatchSize);
+    tradeSellers.reserve(maxBatchSize);
+    insertOrderIds.reserve(maxBatchSize);
+    orderBuyers.reserve(maxBatchSize);
+    tradeStockIds.reserve(maxBatchSize);
+    orderStockIds.reserve(maxBatchSize);
+    updateOrderQuantityIds.reserve(maxBatchSize);
+    updateOrderStatusIds.reserve(maxBatchSize);
+    tradePrices.reserve(maxBatchSize);
+    tradeQuantities.reserve(maxBatchSize);
+    orderPrices.reserve(maxBatchSize);
+    orderQuantities.reserve(maxBatchSize);
+    updateOrderQuantities.reserve(maxBatchSize);
+    tradeStatus.reserve(maxBatchSize);
+    tradeType.reserve(maxBatchSize);
+    orderStatuses.reserve(maxBatchSize);
+    orderSides.reserve(maxBatchSize);
+    updateOrderStatuses.reserve(maxBatchSize);
+    updateOrderQuantityStatuses.reserve(maxBatchSize);
+
     while (true) {
+
+        tradeIds.clear();
+        orderIds.clear();
+        tradeBuyers.clear();
+        tradeSellers.clear();
+        insertOrderIds.clear();
+        orderBuyers.clear();
+        tradeStockIds.clear();
+        orderStockIds.clear();
+        updateOrderQuantityIds.clear();
+        updateOrderStatusIds.clear();
+        tradePrices.clear();
+        tradeQuantities.clear();
+        orderPrices.clear();
+        orderQuantities.clear();
+        updateOrderQuantities.clear();
+        tradeStatus.clear();
+        tradeType.clear();
+        orderStatuses.clear();
+        orderSides.clear();
+        updateOrderStatuses.clear();
+        updateOrderQuantityStatuses.clear();
+
         std::vector<DbTask> tasks;
         {
-            constexpr int maxBatchSize = 5000;
             std::unique_lock<std::mutex> lock(dbMutex);
             cv.wait(lock, [this] { return !taskQueue.empty() || stop; });
 
@@ -58,11 +109,6 @@ void DbWriter::processQueue() {
         }
 
         if (tasks.empty()) continue;
-
-        std::vector<uint64_t> tradeIds, orderIds, tradeBuyers, tradeSellers, insertOrderIds, orderBuyers;
-        std::vector<uint32_t> tradeStockIds, orderStockIds, updateOrderQuantityIds, updateOrderStatusIds;
-        std::vector<int> tradePrices, tradeQuantities, orderPrices, orderQuantities, updateOrderQuantities;
-        std::vector<char> tradeStatus, tradeType, orderStatuses, orderSides, updateOrderStatuses, updateOrderQuantityStatuses;
 
         for (const auto&[type, orderId, tradeId, buyerId, sellerId, price, quantity, stockId, side, status] : tasks) {
             if (type == DbTask::INSERT_ORDER) {
