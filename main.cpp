@@ -50,10 +50,15 @@ std::unordered_map<std::string, std::string> loadEnvFile(const std::string& file
  }
 
 char parseSide(const std::string& sideStr) {
-     if (sideStr == "BUY" || sideStr == "buy" || sideStr == "0") {
-         return 'B';
-     }
-     return 'S';
+     if (sideStr == "b" || sideStr == "B" || sideStr == "BUY" || sideStr == "buy") {
+        return 'B';
+    }
+
+    if (sideStr == "s" || sideStr == "S" || sideStr == "SELL" || sideStr == "sell") {
+        return 'S';
+    }
+
+    return '\0';
  }
 
 void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
@@ -158,12 +163,21 @@ int main() {
         }
 
         try {
-            const auto stockId   = static_cast<uint32_t>(json_data["stock"].i());
-            const auto clientId  = static_cast<uint64_t>(json_data["client"].i());
+            const auto stockIdValue = json_data["ticker"].i() != 0 ? json_data["ticker"].i() : json_data["stock"].i();
+            const auto clientIdValue = json_data["clientId"].i() != 0 ? json_data["clientId"].i() : json_data["client"].i();
             const std::string sideStr = json_data["side"].s();
             const char side          = parseSide(sideStr);
-            const int price         = static_cast<int>(json_data["price"].i());
-            const int quantity      = static_cast<int>(json_data["quantity"].i());
+            const auto priceValue = json_data["price"].i();
+            const auto quantityValue = json_data["originalQuantity"].i() != 0 ? json_data["originalQuantity"].i() : json_data["quantity"].i();
+
+            if (stockIdValue == 0 || clientIdValue == 0 || priceValue == 0 || quantityValue == 0 || side == '\0') {
+                throw std::invalid_argument("Missing or invalid order fields");
+            }
+
+            const auto stockId   = static_cast<uint32_t>(stockIdValue);
+            const auto clientId  = static_cast<uint64_t>(clientIdValue);
+            const int price         = static_cast<int>(priceValue);
+            const int quantity      = static_cast<int>(quantityValue);
 
             const uint64_t newOrderId = globalOrderId.fetch_add(1, std::memory_order_relaxed);
 
@@ -268,5 +282,5 @@ int main() {
 
 });
 
-    app.port(8080).multithreaded().run();
+    app.port(8081).multithreaded().run();
 }
