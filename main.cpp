@@ -9,6 +9,7 @@
 #include <crow.h>
 #include <soci/soci.h>
 #include <soci/postgresql/soci-postgresql.h>
+#include <curl/curl.h>
 
 #include "book.h"
 #include "order.h"
@@ -61,7 +62,7 @@ char parseSide(const std::string& sideStr) {
     return '\0';
  }
 
-void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
+void addOrder(const Order& order, const uint32_t stockId, const int side, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId, std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations, const std::string& springUrl) {
      Book* book_ptr = nullptr;
      {
          std::shared_lock lock(books_map_mutex);
@@ -80,9 +81,9 @@ void addOrder(const Order& order, const uint32_t stockId, const int side, DbWrit
 
      std::lock_guard book_lock(book_ptr->getMutex());
      if (side == 'B') {
-         book_ptr->addBuy(order, stockId, dbWriter, transactionId, orderMutex, locations);
+         book_ptr->addBuy(order, stockId, dbWriter, transactionId, orderMutex, locations, springUrl);
      } else {
-         book_ptr->addSell(order, stockId, dbWriter, transactionId, orderMutex, locations);
+         book_ptr->addSell(order, stockId, dbWriter, transactionId, orderMutex, locations, springUrl);
      }
  }
 
@@ -120,6 +121,7 @@ bool fetchOrderInfo(const uint64_t orderId, uint32_t& stockId, char& side, uint6
 }
 
 int main() {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     auto env = loadEnvFile("../../.env");
     if (env.empty() || !env.contains("DB_USERNAME") || !env.contains("DB_PASSWORD") || !env.contains("DB_HOST") || !env.contains("DB_PORT")) {
         std::cerr << "CRITICAL ERROR: Failed to load environment variables from '../../.env'!" << std::endl;
@@ -132,6 +134,8 @@ int main() {
     const std::string db_hostname = env["DB_HOST"];
     const std::string db_port = env["DB_PORT"];
     const int db_pool = std::stoi(env["DB_POOL"]);
+    const int crow_port = std::stoi(env["CROW_PORT"]);
+    const std::string spring_url = env["SPRING_URL"];
 
     soci::connection_pool pool(db_pool);
 
@@ -153,9 +157,9 @@ int main() {
     DbWriter dbWriter(pool);
 
     crow::SimpleApp app;
-    app.loglevel(crow::LogLevel::Warning);
+    // app.loglevel(crow::LogLevel::Warning);
 
-    CROW_ROUTE(app, "/api/order/add").methods(crow::HTTPMethod::POST)([&dbWriter](const crow::request& req) {
+    CROW_ROUTE(app, "/api/order/add").methods(crow::HTTPMethod::POST)([&dbWriter, spring_url](const crow::request& req) {
         const auto json_data = crow::json::load(req.body);
 
         if (!json_data) {
@@ -163,12 +167,12 @@ int main() {
         }
 
         try {
-            const auto stockIdValue = json_data["ticker"].i() != 0 ? json_data["ticker"].i() : json_data["stock"].i();
-            const auto clientIdValue = json_data["clientId"].i() != 0 ? json_data["clientId"].i() : json_data["client"].i();
+            const auto stockIdValue = json_data["ticker"].i();
+            const auto clientIdValue = json_data["clientId"].i();
             const std::string sideStr = json_data["side"].s();
             const char side          = parseSide(sideStr);
             const auto priceValue = json_data["price"].i();
-            const auto quantityValue = json_data["originalQuantity"].i() != 0 ? json_data["originalQuantity"].i() : json_data["quantity"].i();
+            const auto quantityValue = json_data["originalQuantity"].i();
 
             if (stockIdValue == 0 || clientIdValue == 0 || priceValue == 0 || quantityValue == 0 || side == '\0') {
                 throw std::invalid_argument("Missing or invalid order fields");
@@ -188,7 +192,7 @@ int main() {
                     std::unique_lock lock(order_locations_mutex);
                     orderLocations.insert({newOrderId, newLocation});
                 }
-                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations);
+                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations, spring_url);
                 dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
                 return crow::response(200, "Order processed!");
             }
@@ -202,7 +206,7 @@ int main() {
         }
     });
 
-    CROW_ROUTE(app, "/api/order/edit/<uint>").methods(crow::HTTPMethod::PATCH)([&dbWriter](const crow::request& req, const uint64_t orderId) {
+    CROW_ROUTE(app, "/api/order/edit/<uint>").methods(crow::HTTPMethod::PATCH)([&dbWriter, spring_url](const crow::request& req, const uint64_t orderId) {
 
         const auto json_data = crow::json::load(req.body);
 
@@ -212,7 +216,7 @@ int main() {
 
         try {
             const int price         = static_cast<int>(json_data["price"].i());
-            const int quantity      = static_cast<int>(json_data["quantity"].i());
+            const int quantity      = static_cast<int>(json_data["originalQuantity"].i());
             try {
                 uint64_t clientId;
                 char side;
@@ -240,7 +244,7 @@ int main() {
                     std::unique_lock lock(order_locations_mutex);
                     orderLocations.insert({newOrderId, newLocation});
                 }
-                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations);
+                addOrder(order, stockId, side, dbWriter, globalTransactionId, order_locations_mutex, orderLocations, spring_url);
                 dbWriter.push({DbTask::INSERT_ORDER, newOrderId, 0, clientId, 0, price, quantity, static_cast<uint32_t>(stockId), side, 'N'});
                 return crow::response(200, "Order processed!");
             }
@@ -282,5 +286,6 @@ int main() {
 
 });
 
-    app.port(8081).multithreaded().run();
+    app.port(crow_port).multithreaded().run();
+    curl_global_cleanup();
 }

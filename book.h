@@ -24,9 +24,9 @@ class Book {
 public:
     explicit Book(uint32_t id);
     void addBuy(const Order &order, uint32_t stockId, DbWriter &dbWriter, std::atomic<uint64_t> &transactionId,
-        std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations);
+        std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations, const std::string& springUrl);
     void addSell(const Order &order, uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId,
-        std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations);
+        std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations, const std::string& springUrl);
     uint64_t deleteBuy(uint64_t orderId);
     uint64_t deleteSell(uint64_t orderId);
     void printBook();

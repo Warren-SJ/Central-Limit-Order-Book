@@ -11,21 +11,21 @@
 Book::Book(const uint32_t id) : id(id), pool(), buy_book(&pool), sell_book(&pool), order_lookup(&pool) {}
 
 void Book::addBuy(const Order &order, const uint32_t stockId, DbWriter &dbWriter, std::atomic<uint64_t> &transactionId,
-                  std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
+                  std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations, const std::string& springUrl) {
     const int price = order.getPrice();
     auto [It, inserted] = buy_book.try_emplace(price);
     const auto orderIt = It->second.addOrder(order);
     order_lookup[order.getId()]= {&(It->second), orderIt, price};
-    matchBuy(*this, stockId, dbWriter, transactionId, orderMutex, locations);
+    matchBuy(*this, stockId, dbWriter, transactionId, orderMutex, locations, springUrl);
 }
 
 void Book::addSell(const Order &order, const uint32_t stockId, DbWriter& dbWriter, std::atomic<uint64_t>& transactionId,
-                  std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations) {
+                  std::shared_mutex& orderMutex, std::unordered_map<uint64_t, OrderLocation>& locations, const std::string& springUrl) {
     const int price = order.getPrice();
     auto [It, inserted] = sell_book.try_emplace(price);
     const auto orderIt = It->second.addOrder(order);
     order_lookup[order.getId()]= {&(It->second), orderIt, price};
-    matchSell(*this, stockId, dbWriter, transactionId,  orderMutex, locations);
+    matchSell(*this, stockId, dbWriter, transactionId,  orderMutex, locations, springUrl);
 }
 
 uint64_t Book::deleteBuy(const uint64_t orderId) {
