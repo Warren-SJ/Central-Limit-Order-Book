@@ -117,7 +117,7 @@ void matchSell(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atom
             dbWriter.push({DbTask::UPDATE_ORDER_QUANTITY, buyId, 0, 0, 0, 0, buyQtyLeft, 0, 0, buyStatus});
             dbWriter.push({DbTask::UPDATE_ORDER_QUANTITY, sellId, 0, 0, 0, 0, sellQtyLeft, 0, 0, sellStatus});
 
-            sendMatchNotification(buyId, sellId, price, fillQty, springUrl);
+            sendMatchNotification(buyClient, sellClient, price, fillQty, springUrl);
 
             if (buyQtyLeft == 0) {
                 book.deleteBuy(buyId);
@@ -132,12 +132,13 @@ void matchSell(Book &book, const uint32_t stockId, DbWriter& dbWriter, std::atom
     }
 }
 
-void sendMatchNotification(const uint64_t buyOrderId, const uint64_t sellOrderId, const int price, const int quantity, const std::string& springUrl) {
+void sendMatchNotification(const uint64_t buyClient, const uint64_t sellClient, const int price, const int quantity, std::string springUrl) {
     if (springUrl.empty()) {
         return;
     }
+    springUrl += "api/transaction/execute";
 
-    std::thread([buyOrderId, sellOrderId, price, quantity, springUrl]() {
+    std::thread([buyClient, sellClient, price, quantity, springUrl]() {
         CURL* curl = curl_easy_init();
         if (!curl) {
             std::cerr << "Error: Failed to initialize CURL" << std::endl;
@@ -146,8 +147,8 @@ void sendMatchNotification(const uint64_t buyOrderId, const uint64_t sellOrderId
 
         std::stringstream jsonPayload;
         jsonPayload << "{"
-                    << "\"buyOrderId\":" << buyOrderId << ","
-                    << "\"sellOrderId\":" << sellOrderId << ","
+                    << "\"buyerId\":" << buyClient << ","
+                    << "\"sellerId\":" << sellClient << ","
                     << "\"price\":" << price << ","
                     << "\"quantity\":" << quantity
                     << "}";
@@ -161,8 +162,7 @@ void sendMatchNotification(const uint64_t buyOrderId, const uint64_t sellOrderId
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
-        CURLcode res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
+        if (const CURLcode res = curl_easy_perform(curl); res != CURLE_OK) {
             std::cerr << "Error: Failed to send notification to Spring URL: " << curl_easy_strerror(res) << std::endl;
         }
 
